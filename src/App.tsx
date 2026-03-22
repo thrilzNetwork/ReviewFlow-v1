@@ -143,22 +143,39 @@ const Card = ({ children, className, ...props }: { children: React.ReactNode, cl
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [view, setView] = useState<'guest' | 'admin'>('guest');
-  const [hotelId, setHotelId] = useState<string | null>(null);
+  const [view, setView] = useState<'guest' | 'admin'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('hotelId') ? 'guest' : 'admin';
+    }
+    return 'guest';
+  });
+  const [hotelId, setHotelId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('hotelId');
+    }
+    return null;
+  });
   const [settings, setSettings] = useState<HotelSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Parse URL for hotelId
+  // Sync URL changes (e.g. if user scans QR while app is open)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('hotelId');
-    if (id) {
-      setHotelId(id);
-      setView('guest');
-    } else {
-      setView('admin');
-    }
+    const handleUrlChange = () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('hotelId');
+      if (id) {
+        setHotelId(id);
+        setView('guest');
+      } else {
+        setView('admin');
+      }
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    return () => window.removeEventListener('popstate', handleUrlChange);
   }, []);
 
   // Auth listener
@@ -224,16 +241,29 @@ export default function App() {
     }
   };
 
-  if (loading && hotelId) {
+  if (loading && hotelId && !settings) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
-        <motion.div 
-          animate={{ opacity: [0.4, 1, 0.4] }}
-          transition={{ repeat: Infinity, duration: 2 }}
-          className="text-pink font-bold text-2xl tracking-tighter"
-        >
-          REVIEW FLOW
-        </motion.div>
+      <div className="min-h-screen flex items-center justify-center bg-black overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,131,218,0.05),transparent_70%)]" />
+        <div className="relative flex flex-col items-center gap-8">
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.1, 1],
+              opacity: [0.3, 1, 0.3]
+            }}
+            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            className="w-20 h-20 bg-pink rounded-3xl rotate-3 shadow-[0_0_40px_rgba(255,131,218,0.2)] flex items-center justify-center"
+          >
+            <Star className="text-black w-10 h-10 fill-black" />
+          </motion.div>
+          <motion.div 
+            animate={{ opacity: [0.4, 1, 0.4] }}
+            transition={{ repeat: Infinity, duration: 2, delay: 0.5 }}
+            className="text-white font-black text-xl tracking-tighter uppercase"
+          >
+            Loading Experience
+          </motion.div>
+        </div>
       </div>
     );
   }
@@ -363,6 +393,28 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 font-soehne overflow-hidden relative">
+      {/* Immersive Background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.2, 1],
+            rotate: [0, 5, 0],
+            opacity: [0.1, 0.2, 0.1]
+          }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          className="absolute -top-1/2 -left-1/2 w-full h-full bg-pink/20 blur-[120px] rounded-full"
+        />
+        <motion.div 
+          animate={{ 
+            scale: [1.2, 1, 1.2],
+            rotate: [0, -5, 0],
+            opacity: [0.1, 0.15, 0.1]
+          }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-blue/20 blur-[120px] rounded-full"
+        />
+      </div>
+
       {/* Progress Bar */}
       <div className="fixed top-0 left-0 w-full h-1.5 bg-white/5 z-[100]">
         <motion.div 
@@ -384,7 +436,7 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
             key="welcome"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 1.05, y: -10 }}
+            exit={{ opacity: 0, scale: 1.05, y: -10, filter: "blur(10px)" }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="max-w-md w-full text-center z-10 px-4"
           >
@@ -394,18 +446,35 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
                 animate={{ scale: 1, opacity: 1 }}
                 src={settings.logoUrl} 
                 alt="Logo" 
-                className="h-16 md:h-20 mx-auto mb-10 object-contain filter invert" 
+                className="h-16 md:h-20 mx-auto mb-10 object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.2)]" 
                 referrerPolicy="no-referrer" 
               />
             )}
-            <h1 className="text-4xl md:text-5xl font-black tracking-tighter mb-6 leading-tight uppercase">
-              {settings.welcomeLine}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="mb-4"
+            >
+              <span className="px-4 py-1.5 rounded-full bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-[0.2em] text-supporting-grey">
+                Guest Experience
+              </span>
+            </motion.div>
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter mb-6 leading-[0.85] uppercase">
+              {settings.hotelName}
             </h1>
-            <p className="text-supporting-grey text-lg mb-10 font-medium">
-              We loved having you. How was your stay?
+            <p className="text-supporting-grey text-lg mb-12 font-medium leading-relaxed">
+              {settings.welcomeLine || "We'd love to hear about your stay."}
             </p>
-            <Button onClick={() => setStep('rating')} variant="accent" className="w-full py-6 text-xl uppercase tracking-widest shadow-[0_10px_30px_rgba(255,0,255,0.3)]">
-              Start Review
+            <Button 
+              onClick={() => setStep('rating')} 
+              variant="accent" 
+              className="w-full h-16 text-lg uppercase tracking-widest font-black group overflow-hidden relative shadow-[0_10px_30px_rgba(255,0,255,0.3)]"
+            >
+              <span className="relative z-10">Start Review</span>
+              <motion.div 
+                className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"
+              />
             </Button>
           </motion.div>
         )}
@@ -415,7 +484,7 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
             key="rating"
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 1.1, y: -20 }}
+            exit={{ opacity: 0, scale: 1.1, y: -20, filter: "blur(10px)" }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="max-w-md w-full text-center z-10 px-4"
           >
@@ -427,26 +496,26 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
             >
               {getEmoji(hoverRating || rating)}
             </motion.div>
-            <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-12 uppercase">Rate your stay</h2>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tighter mb-12 uppercase">Rate your stay</h2>
             <div className="flex justify-between gap-2 mb-12">
               {[1, 2, 3, 4, 5].map((star) => (
                 <motion.button
                   key={star}
-                  whileHover={{ scale: 1.2 }}
+                  whileHover={{ scale: 1.2, y: -5 }}
                   whileTap={{ scale: 0.85 }}
                   onMouseEnter={() => setHoverRating(star)}
                   onMouseLeave={() => setHoverRating(0)}
                   onClick={() => handleRatingSubmit(star)}
                   className={cn(
-                    "p-3 rounded-2xl transition-all duration-200",
-                    (hoverRating || rating) >= star ? "text-yellow drop-shadow-[0_0_15px_rgba(232,255,91,0.5)]" : "text-white/5"
+                    "p-3 rounded-2xl transition-all duration-300",
+                    (hoverRating || rating) >= star ? "text-pink drop-shadow-[0_0_20px_rgba(255,0,255,0.4)]" : "text-white/10"
                   )}
                 >
-                  <Star size={44} fill={(hoverRating || rating) >= star ? "currentColor" : "none"} strokeWidth={1.5} />
+                  <Star size={48} fill={(hoverRating || rating) >= star ? "currentColor" : "none"} strokeWidth={1.5} />
                 </motion.button>
               ))}
             </div>
-            <p className="text-supporting-grey text-xs uppercase tracking-widest font-black opacity-40">Tap a star to continue</p>
+            <p className="text-supporting-grey text-[10px] uppercase tracking-[0.3em] font-black opacity-40">Tap a star to continue</p>
           </motion.div>
         )}
 
