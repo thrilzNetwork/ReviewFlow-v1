@@ -33,12 +33,38 @@ service cloud.firestore {
     function isValidReview(data) {
       return data.rating is number && data.rating >= 1 && data.rating <= 5 &&
              (!('oneWord' in data) || (data.oneWord is string && data.oneWord.size() < 100)) &&
+             (!('highlight' in data) || (data.highlight is string && data.highlight.size() < 1000)) &&
+             (!('source' in data) || (data.source is string && data.source.size() < 100)) &&
+             (!('recommend' in data) || (data.recommend is bool)) &&
+             (!('guestName' in data) || (data.guestName is string && data.guestName.size() < 100)) &&
+             (!('guestEmail' in data) || (data.guestEmail is string && data.guestEmail.size() < 200)) &&
              data.timestamp is string && data.timestamp.size() < 100;
     }
 
     function isValidFeedback(data) {
       return data.rating is number && data.rating >= 1 && data.rating <= 5 &&
              data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
+             (!('highlight' in data) || (data.highlight is string && data.highlight.size() < 1000)) &&
+             (!('source' in data) || (data.source is string && data.source.size() < 100)) &&
+             (!('recommend' in data) || (data.recommend is bool)) &&
+             (!('guestName' in data) || (data.guestName is string && data.guestName.size() < 100)) &&
+             (!('guestEmail' in data) || (data.guestEmail is string && data.guestEmail.size() < 200)) &&
+             data.timestamp is string && data.timestamp.size() < 100;
+    }
+
+    function isValidPromo(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 1000)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 500)) &&
+             (!('buttonText' in data) || (data.buttonText is string && data.buttonText.size() < 50)) &&
+             (!('buttonLink' in data) || (data.buttonLink is string && data.buttonLink.size() < 500)) &&
+             data.type in ['promo', 'news', 'newsletter'] &&
+             data.active is bool;
+    }
+
+    function isValidSignup(data) {
+      return data.email is string && isValidEmail(data.email) &&
+             (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
              data.timestamp is string && data.timestamp.size() < 100;
     }
 
@@ -60,6 +86,17 @@ service cloud.firestore {
     match /hotels/{hotelId}/feedback/{feedbackId} {
       allow read: if isHotelAdmin(hotelId);
       allow create: if isValidFeedback(request.resource.data);
+      allow update, delete: if isHotelAdmin(hotelId);
+    }
+
+    match /hotels/{hotelId}/promos/{promoId} {
+      allow read: if true;
+      allow write: if isHotelAdmin(hotelId) && isValidPromo(request.resource.data);
+    }
+
+    match /hotels/{hotelId}/signups/{signupId} {
+      allow read: if isHotelAdmin(hotelId);
+      allow create: if isValidSignup(request.resource.data);
       allow update, delete: if isHotelAdmin(hotelId);
     }
 

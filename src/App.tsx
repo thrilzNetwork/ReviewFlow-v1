@@ -59,6 +59,11 @@ interface Review {
   id: string;
   rating: number;
   oneWord?: string;
+  highlight?: string;
+  source?: string;
+  recommend?: boolean;
+  guestName?: string;
+  guestEmail?: string;
   timestamp: string;
   guestId?: string;
 }
@@ -67,9 +72,32 @@ interface Feedback {
   id: string;
   rating: number;
   comment: string;
+  highlight?: string;
+  source?: string;
+  recommend?: boolean;
+  guestName?: string;
+  guestEmail?: string;
   timestamp: string;
   guestId?: string;
   resolved?: boolean;
+}
+
+interface Promo {
+  id: string;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  buttonText?: string;
+  buttonLink?: string;
+  type: 'promo' | 'news' | 'newsletter' | 'blog';
+  active: boolean;
+}
+
+interface NewsletterSignup {
+  id: string;
+  email: string;
+  name?: string;
+  timestamp: string;
 }
 
 // --- Components ---
@@ -78,14 +106,15 @@ const Button = ({ children, onClick, className, variant = 'primary', disabled = 
   children: React.ReactNode, 
   onClick?: () => void, 
   className?: string, 
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger',
+  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'accent',
   disabled?: boolean
 }) => {
   const variants = {
-    primary: 'bg-black text-white hover:bg-zinc-800',
-    secondary: 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200',
-    outline: 'border border-zinc-200 text-zinc-900 hover:bg-zinc-50',
+    primary: 'bg-white text-black hover:bg-zinc-200',
+    secondary: 'bg-charcoal text-white hover:bg-zinc-800',
+    outline: 'border border-white/20 text-white hover:bg-white/10',
     danger: 'bg-red-500 text-white hover:bg-red-600',
+    accent: 'bg-pink text-black hover:bg-pink-light font-bold',
   };
 
   return (
@@ -93,7 +122,7 @@ const Button = ({ children, onClick, className, variant = 'primary', disabled = 
       onClick={onClick} 
       disabled={disabled}
       className={cn(
-        'px-6 py-3 rounded-xl font-medium transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100',
+        'px-6 py-4 rounded-3xl font-medium transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 tracking-tight',
         variants[variant],
         className
       )}
@@ -103,8 +132,8 @@ const Button = ({ children, onClick, className, variant = 'primary', disabled = 
   );
 };
 
-const Card = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-  <div className={cn('bg-white rounded-2xl border border-zinc-100 shadow-sm p-6', className)}>
+const Card = ({ children, className, ...props }: { children: React.ReactNode, className?: string, [key: string]: any }) => (
+  <div className={cn('bg-charcoal/50 backdrop-blur-md rounded-3xl border border-white/10 p-8', className)} {...props}>
     {children}
   </div>
 );
@@ -197,13 +226,13 @@ export default function App() {
 
   if (loading && hotelId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
+      <div className="min-h-screen flex items-center justify-center bg-black">
         <motion.div 
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ repeat: Infinity, duration: 1.5 }}
-          className="text-zinc-400 font-medium"
+          animate={{ opacity: [0.4, 1, 0.4] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+          className="text-pink font-bold text-2xl tracking-tighter"
         >
-          Review Flow
+          REVIEW FLOW
         </motion.div>
       </div>
     );
@@ -219,17 +248,50 @@ export default function App() {
 // --- Guest Flow ---
 
 function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSettings | null }) {
-  const [step, setStep] = useState<'welcome' | 'rating' | 'oneword' | 'thanks' | 'feedback'>('welcome');
+  const [step, setStep] = useState<'welcome' | 'rating' | 'highlight' | 'oneword' | 'feedback' | 'moreQuestions' | 'shareInfo' | 'thanks' | 'promos'>('welcome');
   const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
   const [oneWord, setOneWord] = useState('');
+  const [highlight, setHighlight] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [source, setSource] = useState('');
+  const [recommend, setRecommend] = useState<boolean | null>(null);
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [promos, setPromos] = useState<Promo[]>([]);
+
+  const steps = ['welcome', 'rating', 'highlight', 'oneword', 'feedback', 'moreQuestions', 'shareInfo', 'promos', 'thanks'];
+  const currentStepIndex = steps.indexOf(step);
+  const progress = ((currentStepIndex + 1) / steps.length) * 100;
+
+  useEffect(() => {
+    const q = query(collection(db, `hotels/${hotelId}/promos`));
+    const unsub = onSnapshot(q, (snap) => {
+      setPromos(snap.docs.map(d => ({ id: d.id, ...d.data() } as Promo)).filter(p => p.active));
+    });
+    return () => unsub();
+  }, [hotelId]);
 
   const suggestions = ['Amazing!', 'Perfect!', 'Wow!', 'Cozy', 'Stunning', 'Friendly'];
+  const sourceOptions = ['Google Search', 'Social Media', 'Friend/Family', 'Travel Agent', 'Other'];
+
+  const getEmoji = (val: number) => {
+    if (val === 1) return '😡';
+    if (val === 2) return '😕';
+    if (val === 3) return '😐';
+    if (val === 4) return '😊';
+    if (val === 5) return '🤩';
+    return '✨';
+  };
 
   const handleRatingSubmit = async (val: number) => {
     setRating(val);
-    if (val >= 4) {
+    setStep('highlight');
+  };
+
+  const handleHighlightSubmit = () => {
+    if (rating >= 4) {
       setStep('oneword');
     } else {
       setStep('feedback');
@@ -239,28 +301,51 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
   const handleFinalSubmit = async () => {
     setSubmitting(true);
     try {
+      const commonData = {
+        rating,
+        highlight,
+        source: source || null,
+        recommend: recommend,
+        guestName: guestName || null,
+        guestEmail: guestEmail || null,
+        timestamp: new Date().toISOString(),
+        guestId: 'anonymous'
+      };
+
       if (rating >= 4) {
         await addDoc(collection(db, `hotels/${hotelId}/reviews`), {
-          rating,
+          ...commonData,
           oneWord,
-          timestamp: new Date().toISOString(),
-          guestId: 'anonymous'
         });
-        setStep('thanks');
       } else {
         await addDoc(collection(db, `hotels/${hotelId}/feedback`), {
-          rating,
+          ...commonData,
           comment: feedback,
-          timestamp: new Date().toISOString(),
-          guestId: 'anonymous',
           resolved: false
         });
+      }
+
+      if (promos.length > 0) {
+        setStep('promos');
+      } else {
         setStep('thanks');
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `hotels/${hotelId}/${rating >= 4 ? 'reviews' : 'feedback'}`);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleNewsletterSignup = async (email: string, name?: string) => {
+    try {
+      await addDoc(collection(db, `hotels/${hotelId}/signups`), {
+        email,
+        name: name || null,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `hotels/${hotelId}/signups`);
     }
   };
 
@@ -277,23 +362,49 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 font-sans" style={{ '--primary': settings.primaryColor } as any}>
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 font-soehne overflow-hidden relative">
+      {/* Progress Bar */}
+      <div className="fixed top-0 left-0 w-full h-1.5 bg-white/5 z-[100]">
+        <motion.div 
+          className="h-full bg-pink shadow-[0_0_15px_#FF00FF]"
+          initial={{ width: 0 }}
+          animate={{ width: `${progress}%` }}
+          transition={{ type: 'spring', stiffness: 50, damping: 20 }}
+        />
+      </div>
+
+      {/* Background Accents */}
+      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-pink/10 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-blue/10 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute top-[30%] right-[-10%] w-[30%] h-[30%] bg-yellow/5 blur-[100px] rounded-full pointer-events-none" />
+
       <AnimatePresence mode="wait">
         {step === 'welcome' && (
           <motion.div 
             key="welcome"
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="max-w-md w-full text-center"
+            exit={{ opacity: 0, y: -40 }}
+            className="max-w-md w-full text-center z-10"
           >
             {settings.logoUrl && (
-              <img src={settings.logoUrl} alt="Logo" className="h-16 mx-auto mb-8 object-contain" referrerPolicy="no-referrer" />
+              <motion.img 
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                src={settings.logoUrl} 
+                alt="Logo" 
+                className="h-20 mx-auto mb-12 object-contain filter invert" 
+                referrerPolicy="no-referrer" 
+              />
             )}
-            <h1 className="text-3xl font-bold tracking-tight mb-4">{settings.welcomeLine}</h1>
-            <p className="text-zinc-500 mb-8">Hey, we loved having you—tell us how it felt?</p>
-            <Button onClick={() => setStep('rating')} className="w-full py-4 text-lg">
-              Let's go
+            <h1 className="text-5xl font-black tracking-tighter mb-6 leading-tight uppercase">
+              {settings.welcomeLine}
+            </h1>
+            <p className="text-supporting-grey text-lg mb-12 font-medium">
+              We loved having you. How was your stay?
+            </p>
+            <Button onClick={() => setStep('rating')} variant="accent" className="w-full py-5 text-xl uppercase tracking-widest">
+              Start Review
             </Button>
           </motion.div>
         )}
@@ -301,66 +412,98 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
         {step === 'rating' && (
           <motion.div 
             key="rating"
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="max-w-md w-full text-center"
+            className="max-w-md w-full text-center z-10"
           >
-            <h2 className="text-2xl font-bold mb-12">How was your stay?</h2>
-            <div className="flex justify-between mb-12">
+            <motion.div 
+              key={hoverRating || rating}
+              initial={{ scale: 0.5, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              className="text-9xl mb-12 drop-shadow-[0_10px_30px_rgba(255,255,255,0.1)]"
+            >
+              {getEmoji(hoverRating || rating)}
+            </motion.div>
+            <h2 className="text-4xl font-black tracking-tighter mb-16 uppercase">Rate your stay</h2>
+            <div className="flex justify-between mb-16">
               {[1, 2, 3, 4, 5].map((star) => (
                 <motion.button
                   key={star}
-                  whileHover={{ scale: 1.2 }}
+                  whileHover={{ scale: 1.3, rotate: 5 }}
                   whileTap={{ scale: 0.9 }}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(0)}
                   onClick={() => handleRatingSubmit(star)}
                   className={cn(
                     "p-2 rounded-full transition-all duration-300",
-                    rating >= star ? "text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]" : "text-zinc-200"
+                    (hoverRating || rating) >= star ? "text-yellow drop-shadow-[0_0_20px_rgba(232,255,91,0.6)]" : "text-white/10"
                   )}
-                  onMouseEnter={() => setRating(star)}
-                  onMouseLeave={() => setRating(0)}
                 >
-                  <Star size={48} fill={rating >= star ? "currentColor" : "none"} />
+                  <Star size={56} fill={(hoverRating || rating) >= star ? "currentColor" : "none"} strokeWidth={1.5} />
                 </motion.button>
               ))}
             </div>
-            <p className="text-zinc-400 text-sm">Tap a star to rate</p>
+            <p className="text-supporting-grey text-sm uppercase tracking-widest font-bold opacity-50">Tap a star to continue</p>
+          </motion.div>
+        )}
+
+        {step === 'highlight' && (
+          <motion.div 
+            key="highlight"
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="max-w-md w-full z-10"
+          >
+            <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">The Highlight?</h2>
+            <p className="text-supporting-grey text-lg mb-10">What was the best part of your stay?</p>
+            
+            <textarea 
+              value={highlight}
+              onChange={(e) => setHighlight(e.target.value)}
+              placeholder="The breakfast, the view, the staff..."
+              className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink mb-8 min-h-[120px] placeholder:text-white/20"
+              autoFocus
+            />
+
+            <Button onClick={handleHighlightSubmit} variant="accent" className="w-full uppercase tracking-widest">
+              Next
+            </Button>
           </motion.div>
         )}
 
         {step === 'oneword' && (
           <motion.div 
             key="oneword"
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: 40 }}
             animate={{ opacity: 1, x: 0 }}
-            className="max-w-md w-full"
+            className="max-w-md w-full z-10"
           >
-            <h2 className="text-2xl font-bold mb-2">Love that!</h2>
-            <p className="text-zinc-500 mb-8">One word to describe your experience?</p>
+            <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">Love that!</h2>
+            <p className="text-supporting-grey text-lg mb-10">One word to describe your experience?</p>
             
             <input 
               type="text" 
               value={oneWord}
               onChange={(e) => setOneWord(e.target.value)}
               placeholder="Amazing!"
-              className="w-full p-4 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-black mb-4"
+              className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-xl focus:outline-none focus:ring-2 focus:ring-pink mb-6 placeholder:text-white/20"
               autoFocus
             />
 
-            <div className="flex flex-wrap gap-2 mb-8">
+            <div className="flex flex-wrap gap-3 mb-12">
               {suggestions.map(s => (
                 <button 
                   key={s}
                   onClick={() => setOneWord(s)}
-                  className="px-4 py-2 rounded-full bg-zinc-100 text-zinc-600 text-sm hover:bg-zinc-200 transition-colors"
+                  className="px-5 py-2.5 rounded-full bg-white/5 text-white text-sm font-bold hover:bg-pink hover:text-black transition-all uppercase tracking-wider"
                 >
                   {s}
                 </button>
               ))}
             </div>
 
-            <Button onClick={handleFinalSubmit} disabled={!oneWord || submitting} className="w-full">
-              {submitting ? 'Sending...' : 'Next'}
+            <Button onClick={() => setStep('moreQuestions')} variant="accent" className="w-full uppercase tracking-widest">
+              Next
             </Button>
           </motion.div>
         )}
@@ -368,26 +511,225 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
         {step === 'feedback' && (
           <motion.div 
             key="feedback"
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: 40 }}
             animate={{ opacity: 1, x: 0 }}
-            className="max-w-md w-full"
+            className="max-w-md w-full z-10"
           >
-            <h2 className="text-2xl font-bold mb-2">We're sorry to hear that.</h2>
-            <p className="text-zinc-500 mb-8">Want to help us fix this quietly?</p>
+            <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">We're sorry.</h2>
+            <p className="text-supporting-grey text-lg mb-10">How can we make it right?</p>
             
             <textarea 
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               placeholder="Tell us what went wrong..."
-              className="w-full p-4 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-black mb-8 min-h-[120px]"
+              className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink mb-8 min-h-[160px] placeholder:text-white/20"
               autoFocus
             />
 
-            <div className="flex gap-4">
-              <Button variant="outline" onClick={() => setStep('thanks')} className="flex-1">No thanks</Button>
-              <Button onClick={handleFinalSubmit} disabled={!feedback || submitting} className="flex-1">
-                {submitting ? 'Sending...' : 'Send Feedback'}
+            <div className="flex flex-col gap-4">
+              <Button onClick={() => setStep('moreQuestions')} variant="accent" className="w-full uppercase tracking-widest">
+                Next
               </Button>
+              <button 
+                onClick={() => setStep('moreQuestions')} 
+                className="text-supporting-grey hover:text-white transition-colors text-sm font-bold uppercase tracking-widest py-2"
+              >
+                Skip for now
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {step === 'moreQuestions' && (
+          <motion.div 
+            key="moreQuestions"
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="max-w-md w-full z-10"
+          >
+            <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">Quick Bonus!</h2>
+            <p className="text-supporting-grey text-lg mb-10">Help us grow with two quick taps.</p>
+            
+            <div className="space-y-8 mb-12">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-supporting-grey block mb-4">How did you find us?</label>
+                <div className="flex flex-wrap gap-3">
+                  {sourceOptions.map(opt => (
+                    <motion.button 
+                      key={opt}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setSource(opt)}
+                      className={cn(
+                        "px-5 py-2.5 rounded-full text-xs font-bold transition-all uppercase tracking-wider border",
+                        source === opt ? "bg-pink text-black border-pink" : "bg-white/5 text-white border-white/10 hover:border-white/20"
+                      )}
+                    >
+                      {opt}
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-supporting-grey block mb-4">Recommend to a friend?</label>
+                <div className="flex gap-4">
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setRecommend(true)}
+                    className={cn(
+                      "flex-1 p-6 rounded-3xl border transition-all flex flex-col items-center gap-2",
+                      recommend === true ? "bg-emerald-500/10 border-emerald-500 text-emerald-500" : "bg-white/5 border-white/10 text-white hover:border-white/20"
+                    )}
+                  >
+                    <ThumbsUp size={24} />
+                    <span className="text-xs font-black uppercase tracking-widest">Yes</span>
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setRecommend(false)}
+                    className={cn(
+                      "flex-1 p-6 rounded-3xl border transition-all flex flex-col items-center gap-2",
+                      recommend === false ? "bg-red-500/10 border-red-500 text-red-500" : "bg-white/5 border-white/10 text-white hover:border-white/20"
+                    )}
+                  >
+                    <ThumbsDown size={24} />
+                    <span className="text-xs font-black uppercase tracking-widest">No</span>
+                  </motion.button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <Button onClick={() => setStep('shareInfo')} variant="accent" className="w-full uppercase tracking-widest">
+                Next
+              </Button>
+              <button 
+                onClick={() => setStep('shareInfo')} 
+                className="text-supporting-grey hover:text-white transition-colors text-sm font-bold uppercase tracking-widest py-2"
+              >
+                Skip
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {step === 'shareInfo' && (
+          <motion.div 
+            key="shareInfo"
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="max-w-md w-full z-10"
+          >
+            <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">VIP Access?</h2>
+            <p className="text-supporting-grey text-lg mb-10">Share your info for exclusive treats and follow-ups.</p>
+            
+            <div className="space-y-4 mb-8">
+              <input 
+                type="text" 
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="Your Name"
+                className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink placeholder:text-white/20"
+              />
+              <input 
+                type="email" 
+                value={guestEmail}
+                onChange={(e) => setGuestEmail(e.target.value)}
+                placeholder="Your Email"
+                className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink placeholder:text-white/20"
+              />
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <Button onClick={handleFinalSubmit} disabled={submitting} variant="accent" className="w-full uppercase tracking-widest">
+                {submitting ? 'Sending...' : 'Join the Circle'}
+              </Button>
+              <button 
+                onClick={handleFinalSubmit} 
+                disabled={submitting}
+                className="text-supporting-grey hover:text-white transition-colors text-sm font-bold uppercase tracking-widest py-2"
+              >
+                Maybe Later
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {step === 'promos' && (
+          <motion.div 
+            key="promos"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="max-w-md w-full text-center z-10"
+          >
+            <div className="space-y-8">
+              {promos.map((promo, idx) => (
+                <motion.div 
+                  key={promo.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="p-8 rounded-[40px] bg-charcoal border border-white/10 overflow-hidden relative"
+                >
+                  {promo.imageUrl && (
+                    <img src={promo.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-20" referrerPolicy="no-referrer" />
+                  )}
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-center gap-2 mb-4">
+                        {promo.type === 'blog' && <MessageSquare size={16} className="text-pink" />}
+                        {promo.type === 'newsletter' && <Mail size={16} className="text-pink" />}
+                        {promo.type === 'promo' && <ThumbsUp size={16} className="text-pink" />}
+                        <span className="text-[10px] font-black uppercase tracking-widest text-pink">{promo.type}</span>
+                      </div>
+                      <h3 className="text-3xl font-black uppercase tracking-tight mb-3 leading-tight">{promo.title}</h3>
+                      <p className="text-supporting-grey font-medium mb-8 leading-relaxed">{promo.description}</p>
+                    
+                    {promo.type === 'newsletter' ? (
+                      <div className="flex gap-2">
+                        <input 
+                          type="email" 
+                          placeholder="Email" 
+                          className="flex-1 p-4 bg-white/5 border border-white/10 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-pink"
+                          id={`newsletter-${promo.id}`}
+                        />
+                        <Button 
+                          variant="accent" 
+                          className="px-6 py-4 text-xs uppercase tracking-widest"
+                          onClick={() => {
+                            const input = document.getElementById(`newsletter-${promo.id}`) as HTMLInputElement;
+                            if (input?.value) {
+                              handleNewsletterSignup(input.value, guestName);
+                              input.value = '';
+                              alert('Thank you for signing up!');
+                            }
+                          }}
+                        >
+                          Join
+                        </Button>
+                      </div>
+                    ) : (
+                      promo.buttonLink && (
+                        <Button 
+                          variant="accent" 
+                          className="w-full uppercase tracking-widest text-sm"
+                          onClick={() => window.open(promo.buttonLink, '_blank')}
+                        >
+                          {promo.buttonText || 'Learn More'}
+                        </Button>
+                      )
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+              <button 
+                onClick={() => setStep('thanks')} 
+                className="text-supporting-grey hover:text-white transition-colors text-sm font-bold uppercase tracking-widest py-4"
+              >
+                Continue to Final Step
+              </button>
             </div>
           </motion.div>
         )}
@@ -397,33 +739,27 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
             key="thanks"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="max-w-md w-full text-center"
+            className="max-w-md w-full text-center z-10"
           >
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-8">
-              <CheckCircle className="w-10 h-10 text-green-600" />
+            <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-10 border border-emerald-500/30">
+              <CheckCircle className="w-12 h-12 text-emerald-500" />
             </div>
-            <h2 className="text-3xl font-bold mb-4">Thank you!</h2>
+            <h2 className="text-5xl font-black tracking-tighter mb-6 uppercase">Thank you</h2>
             
             {rating >= 4 ? (
               <>
-                <p className="text-zinc-500 mb-8">Want to shout it out and help others find us?</p>
-                <div className="grid grid-cols-2 gap-4">
+                <p className="text-supporting-grey text-lg mb-12">Help others find us by sharing your experience.</p>
+                <div className="grid grid-cols-1 gap-4">
                   {settings.googleLink && (
-                    <SocialButton icon={<img src="https://www.google.com/favicon.ico" className="w-5 h-5" />} label="Google" href={settings.googleLink} />
+                    <SocialButton icon={<img src="https://www.google.com/favicon.ico" className="w-6 h-6" />} label="Review on Google" href={settings.googleLink} />
                   )}
                   {settings.tripAdvisorLink && (
-                    <SocialButton icon={<ThumbsUp className="w-5 h-5" />} label="TripAdvisor" href={settings.tripAdvisorLink} />
-                  )}
-                  {settings.yelpLink && (
-                    <SocialButton icon={<MessageSquare className="w-5 h-5" />} label="Yelp" href={settings.yelpLink} />
-                  )}
-                  {settings.facebookLink && (
-                    <SocialButton icon={<Share2 className="w-5 h-5" />} label="Facebook" href={settings.facebookLink} />
+                    <SocialButton icon={<ThumbsUp className="w-6 h-6 text-emerald-400" />} label="Rate on TripAdvisor" href={settings.tripAdvisorLink} />
                   )}
                 </div>
               </>
             ) : (
-              <p className="text-zinc-500">We've received your feedback and will look into it immediately. Next time's on us!</p>
+              <p className="text-supporting-grey text-lg">We've received your feedback and will look into it immediately. We hope to see you again soon.</p>
             )}
           </motion.div>
         )}
@@ -438,10 +774,13 @@ function SocialButton({ icon, label, href }: { icon: React.ReactNode, label: str
       href={href} 
       target="_blank" 
       rel="noopener noreferrer"
-      className="flex items-center justify-center gap-3 p-4 rounded-xl border border-zinc-100 bg-zinc-50 hover:bg-zinc-100 transition-colors"
+      className="flex items-center justify-between gap-4 p-6 rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all group"
     >
-      {icon}
-      <span className="font-medium text-sm">{label}</span>
+      <div className="flex items-center gap-4">
+        {icon}
+        <span className="font-bold text-lg uppercase tracking-tight">{label}</span>
+      </div>
+      <ChevronRight className="w-5 h-5 text-white/20 group-hover:text-pink transition-colors" />
     </a>
   );
 }
@@ -455,10 +794,87 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
   onSignIn: () => void,
   authError: string | null
 }) {
-  const [activeTab, setActiveTab] = useState<'inbox' | 'settings' | 'qr' | 'guests'>('inbox');
+  const [activeTab, setActiveTab] = useState<'inbox' | 'settings' | 'qr' | 'guests' | 'promos'>('inbox');
   const [reviews, setReviews] = useState<Review[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [promos, setPromos] = useState<Promo[]>([]);
+  const [signups, setSignups] = useState<NewsletterSignup[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedGuest, setSelectedGuest] = useState<any>(null);
+
+  // Unified Guest List
+  const guestList = useMemo(() => {
+    const guests = new Map<string, { name: string, email: string, source?: string, timestamp: string, type: 'Review' | 'Feedback' | 'Newsletter' }>();
+    
+    reviews.forEach(r => {
+      if (r.guestEmail) {
+        guests.set(r.guestEmail, { 
+          name: r.guestName || 'Anonymous', 
+          email: r.guestEmail, 
+          source: r.source,
+          timestamp: r.timestamp,
+          type: 'Review'
+        });
+      }
+    });
+
+    feedback.forEach(f => {
+      if (f.guestEmail) {
+        const existing = guests.get(f.guestEmail);
+        if (!existing || new Date(f.timestamp) > new Date(existing.timestamp)) {
+          guests.set(f.guestEmail, { 
+            name: f.guestName || 'Anonymous', 
+            email: f.guestEmail, 
+            source: f.source,
+            timestamp: f.timestamp,
+            type: 'Feedback'
+          });
+        }
+      }
+    });
+
+    signups.forEach(s => {
+      const existing = guests.get(s.email);
+      if (!existing || new Date(s.timestamp) > new Date(existing.timestamp)) {
+        guests.set(s.email, { 
+          name: s.name || 'Anonymous', 
+          email: s.email, 
+          timestamp: s.timestamp,
+          type: 'Newsletter'
+        });
+      }
+    });
+
+    return Array.from(guests.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [reviews, feedback, signups]);
+
+  const exportToCSV = () => {
+    if (guestList.length === 0) return;
+    
+    const headers = ['Name', 'Email', 'Source', 'Type', 'Date'];
+    const rows = guestList.map(g => [
+      g.name,
+      g.email,
+      g.source || 'N/A',
+      g.type,
+      new Date(g.timestamp).toLocaleDateString()
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `guests_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Form state for settings
   const [form, setForm] = useState<HotelSettings>({
@@ -473,13 +889,24 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
     adminEmail: user?.email || ''
   });
 
+  // Promo form state
+  const [promoForm, setPromoForm] = useState<Partial<Promo>>({
+    title: '',
+    description: '',
+    imageUrl: '',
+    buttonText: '',
+    buttonLink: '',
+    type: 'promo',
+    active: true
+  });
+
   useEffect(() => {
     if (settings) {
       setForm(settings);
     }
   }, [settings]);
 
-  // Fetch reviews & feedback
+  // Fetch reviews, feedback, promos, signups
   useEffect(() => {
     if (!hotelId || !user) return;
 
@@ -497,9 +924,25 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
       handleFirestoreError(error, OperationType.GET, `hotels/${hotelId}/feedback`);
     });
 
+    const qPromos = query(collection(db, `hotels/${hotelId}/promos`), orderBy('active', 'desc'));
+    const unsubPromos = onSnapshot(qPromos, (snap) => {
+      setPromos(snap.docs.map(d => ({ id: d.id, ...d.data() } as Promo)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `hotels/${hotelId}/promos`);
+    });
+
+    const qSignups = query(collection(db, `hotels/${hotelId}/signups`), orderBy('timestamp', 'desc'));
+    const unsubSignups = onSnapshot(qSignups, (snap) => {
+      setSignups(snap.docs.map(d => ({ id: d.id, ...d.data() } as NewsletterSignup)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `hotels/${hotelId}/signups`);
+    });
+
     return () => {
       unsubReviews();
       unsubFeedback();
+      unsubPromos();
+      unsubSignups();
     };
   }, [hotelId, user]);
 
@@ -516,30 +959,51 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
     }
   };
 
+  const handleAddPromo = async () => {
+    if (!hotelId) return;
+    try {
+      await addDoc(collection(db, `hotels/${hotelId}/promos`), promoForm);
+      setPromoForm({ title: '', description: '', imageUrl: '', buttonText: '', buttonLink: '', type: 'promo', active: true });
+      alert('Promo added!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `hotels/${hotelId}/promos`);
+    }
+  };
+
+  const togglePromo = async (id: string, active: boolean) => {
+    if (!hotelId) return;
+    try {
+      await updateDoc(doc(db, `hotels/${hotelId}/promos`, id), { active });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `hotels/${hotelId}/promos/${id}`);
+    }
+  };
+
   if (!user) {
     return (
-      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full text-center p-8">
-          <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <LayoutDashboard className="text-white w-8 h-8" />
+      <div className="min-h-screen bg-black flex items-center justify-center p-4 font-soehne">
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,131,218,0.1),transparent_70%)] pointer-events-none" />
+        <Card className="max-w-md w-full text-center p-12 relative overflow-hidden">
+          <div className="w-20 h-20 bg-pink rounded-3xl flex items-center justify-center mx-auto mb-8 rotate-3 shadow-[0_0_30px_rgba(255,131,218,0.3)]">
+            <LayoutDashboard className="text-black w-10 h-10" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">Review Flow Admin</h1>
-          <p className="text-zinc-500 mb-8">Manage your hotel's reputation with privacy-first tools.</p>
+          <h1 className="text-4xl font-black mb-4 tracking-tighter uppercase">Review Flow</h1>
+          <p className="text-supporting-grey mb-10 font-medium">Manage your hotel's reputation with privacy-first tools.</p>
           
           {authError && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-3">
+            <div className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm flex items-center gap-3">
               <AlertCircle size={18} className="shrink-0" />
               <p className="text-left">{authError}</p>
             </div>
           )}
 
-          <Button onClick={onSignIn} className="w-full flex items-center justify-center gap-3 py-4">
+          <Button onClick={onSignIn} variant="accent" className="w-full flex items-center justify-center gap-3 py-5 uppercase tracking-widest">
             <User size={20} />
             Sign in with Google
           </Button>
           
-          <p className="mt-6 text-xs text-zinc-400">
-            By signing in, you agree to our privacy-first data ownership policy.
+          <p className="mt-8 text-xs text-supporting-grey/50 uppercase tracking-widest font-bold">
+            Privacy-first data ownership
           </p>
         </Card>
       </div>
@@ -547,87 +1011,101 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col md:flex-row pb-20 md:pb-0">
+    <div className="min-h-screen bg-black text-white flex flex-col md:flex-row pb-20 md:pb-0 font-soehne">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 bg-white border-r border-zinc-200 flex-col sticky top-0 h-screen">
-        <div className="p-6 flex items-center gap-3 border-bottom border-zinc-100">
-          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
-            <LayoutDashboard className="text-white w-5 h-5" />
+      <aside className="hidden md:flex w-72 bg-charcoal border-r border-white/5 flex-col sticky top-0 h-screen">
+        <div className="p-8 flex items-center gap-4">
+          <div className="w-10 h-10 bg-pink rounded-xl flex items-center justify-center rotate-3">
+            <LayoutDashboard className="text-black w-6 h-6" />
           </div>
-          <span className="font-bold text-lg">Review Flow</span>
+          <span className="font-black text-2xl tracking-tighter uppercase">Review Flow</span>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-6 space-y-2">
           <NavItem active={activeTab === 'inbox'} icon={<Mail size={20} />} label="Inbox" onClick={() => setActiveTab('inbox')} />
           <NavItem active={activeTab === 'settings'} icon={<SettingsIcon size={20} />} label="Settings" onClick={() => setActiveTab('settings')} />
+          <NavItem active={activeTab === 'promos'} icon={<Share2 size={20} />} label="Slides" onClick={() => setActiveTab('promos')} />
           <NavItem active={activeTab === 'qr'} icon={<QrCode size={20} />} label="QR Generator" onClick={() => setActiveTab('qr')} />
           <NavItem active={activeTab === 'guests'} icon={<User size={20} />} label="Guests" onClick={() => setActiveTab('guests')} />
         </nav>
 
-        <div className="p-4 border-t border-zinc-100">
+        <div className="p-6 border-t border-white/5">
           <button 
             onClick={() => signOut(auth)}
-            className="flex items-center gap-3 w-full p-3 text-zinc-500 hover:text-red-500 hover:bg-red-50 transition-colors rounded-xl"
+            className="flex items-center gap-3 w-full p-4 text-supporting-grey hover:text-red-400 hover:bg-red-400/5 transition-all rounded-2xl font-bold uppercase tracking-widest text-xs"
           >
             <LogOut size={20} />
-            <span className="font-medium">Sign Out</span>
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 flex justify-around p-2 z-50">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-charcoal/80 backdrop-blur-xl border-t border-white/5 flex justify-around p-4 z-50">
         <MobileNavItem active={activeTab === 'inbox'} icon={<Mail size={20} />} label="Inbox" onClick={() => setActiveTab('inbox')} />
         <MobileNavItem active={activeTab === 'settings'} icon={<SettingsIcon size={20} />} label="Settings" onClick={() => setActiveTab('settings')} />
+        <MobileNavItem active={activeTab === 'promos'} icon={<Share2 size={20} />} label="Slides" onClick={() => setActiveTab('promos')} />
         <MobileNavItem active={activeTab === 'qr'} icon={<QrCode size={20} />} label="QR" onClick={() => setActiveTab('qr')} />
         <MobileNavItem active={activeTab === 'guests'} icon={<User size={20} />} label="Guests" onClick={() => setActiveTab('guests')} />
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+      <main className="flex-1 overflow-y-auto p-6 md:p-12">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
           <div>
-            <h2 className="text-2xl font-bold">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h2>
-            <p className="text-zinc-500 text-sm">Manage your hotel's guest experience.</p>
+            <h2 className="text-5xl font-black tracking-tighter uppercase mb-2">{activeTab}</h2>
+            <p className="text-supporting-grey font-medium">Manage your hotel's guest experience.</p>
           </div>
-          <div className="flex items-center gap-4 w-full md:w-auto bg-white p-3 rounded-2xl border border-zinc-100 md:bg-transparent md:p-0 md:border-0">
+          <div className="flex items-center gap-4 w-full md:w-auto bg-charcoal p-4 rounded-3xl border border-white/5">
             <div className="text-left md:text-right flex-1 md:flex-none">
-              <p className="font-medium text-sm">{user.displayName}</p>
-              <p className="text-xs text-zinc-400">{user.email}</p>
+              <p className="font-bold text-sm uppercase tracking-tight">{user.displayName}</p>
+              <p className="text-xs text-supporting-grey uppercase tracking-widest">{user.email}</p>
             </div>
-            {user.photoURL && <img src={user.photoURL} className="w-10 h-10 rounded-full border border-zinc-200" referrerPolicy="no-referrer" />}
-            <button onClick={() => signOut(auth)} className="md:hidden p-2 text-zinc-400 hover:text-red-500">
-              <LogOut size={20} />
-            </button>
+            {user.photoURL && <img src={user.photoURL} className="w-12 h-12 rounded-2xl border border-white/10" referrerPolicy="no-referrer" />}
           </div>
         </header>
 
         {activeTab === 'inbox' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-bold flex items-center gap-2">
-                    <ThumbsUp className="text-green-500 w-5 h-5" />
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
+                    <ThumbsUp className="text-emerald-400 w-6 h-6" />
                     Recent Reviews
                   </h3>
-                  <span className="text-xs font-medium px-2 py-1 bg-green-50 text-green-600 rounded-full">{reviews.length} total</span>
+                  <span className="text-[10px] font-black px-3 py-1 bg-emerald-400/10 text-emerald-400 rounded-full uppercase tracking-widest border border-emerald-400/20">{reviews.length} total</span>
                 </div>
                 <div className="space-y-4">
                   {reviews.length === 0 ? (
                     <EmptyState message="No reviews yet." />
                   ) : (
                     reviews.map(r => (
-                      <div key={r.id} className="p-4 rounded-xl border border-zinc-50 bg-zinc-50/50">
-                        <div className="flex justify-between mb-1">
-                          <div className="flex gap-1">
+                      <div key={r.id} className="p-6 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all">
+                        <div className="flex justify-between mb-4">
+                          <div className="flex gap-1.5">
                             {[...Array(5)].map((_, i) => (
-                              <Star key={i} size={14} fill={i < r.rating ? "#fac815" : "none"} className={i < r.rating ? "text-yellow-400" : "text-zinc-200"} />
+                              <Star key={i} size={16} fill="var(--color-yellow)" className={i < r.rating ? "text-yellow" : "text-white/10"} />
                             ))}
                           </div>
-                          <span className="text-[10px] text-zinc-400">{new Date(r.timestamp).toLocaleDateString()}</span>
+                          <span className="text-[10px] font-bold text-supporting-grey uppercase tracking-widest">{new Date(r.timestamp).toLocaleDateString()}</span>
                         </div>
-                        <p className="font-medium text-zinc-800">"{r.oneWord}"</p>
+                        <p className="text-xl font-bold tracking-tight mb-2">"{r.oneWord}"</p>
+                        <div className="space-y-2 mb-4">
+                          {r.highlight && <p className="text-sm text-supporting-grey italic">Highlight: {r.highlight}</p>}
+                          {r.source && <p className="text-[10px] text-supporting-grey uppercase tracking-widest">Source: {r.source}</p>}
+                          {r.recommend !== undefined && (
+                            <p className="text-[10px] text-supporting-grey uppercase tracking-widest flex items-center gap-1">
+                              Recommend: {r.recommend ? <ThumbsUp size={10} className="text-emerald-400" /> : <ThumbsDown size={10} className="text-red-400" />}
+                            </p>
+                          )}
+                        </div>
+                        {r.guestName && (
+                          <div className="pt-4 border-t border-white/5 flex items-center gap-2">
+                            <User size={12} className="text-pink" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">{r.guestName} {r.guestEmail && `(${r.guestEmail})`}</span>
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -635,27 +1113,42 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
               </Card>
 
               <Card>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-bold flex items-center gap-2">
-                    <ThumbsDown className="text-red-500 w-5 h-5" />
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
+                    <ThumbsDown className="text-red-400 w-6 h-6" />
                     Private Feedback
                   </h3>
-                  <span className="text-xs font-medium px-2 py-1 bg-red-50 text-red-600 rounded-full">{feedback.length} total</span>
+                  <span className="text-[10px] font-black px-3 py-1 bg-red-400/10 text-red-400 rounded-full uppercase tracking-widest border border-red-400/20">{feedback.length} total</span>
                 </div>
                 <div className="space-y-4">
                   {feedback.length === 0 ? (
                     <EmptyState message="No feedback yet." />
                   ) : (
                     feedback.map(f => (
-                      <div key={f.id} className="p-4 rounded-xl border border-red-50 bg-red-50/30">
-                        <div className="flex justify-between mb-2">
-                          <span className="text-xs font-bold text-red-600">{f.rating} Stars</span>
-                          <span className="text-[10px] text-zinc-400">{new Date(f.timestamp).toLocaleDateString()}</span>
+                      <div key={f.id} className="p-6 rounded-2xl bg-red-400/5 border border-red-400/10">
+                        <div className="flex justify-between mb-4">
+                          <span className="text-xs font-black text-red-400 uppercase tracking-widest">{f.rating} Stars</span>
+                          <span className="text-[10px] font-bold text-supporting-grey uppercase tracking-widest">{new Date(f.timestamp).toLocaleDateString()}</span>
                         </div>
-                        <p className="text-sm text-zinc-700 mb-3">{f.comment}</p>
-                        <div className="flex gap-2">
-                          <button className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-black">Reply via Email</button>
-                          <button className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-green-600">Resolve</button>
+                        <p className="text-lg font-medium text-white/90 mb-2 leading-relaxed">{f.comment}</p>
+                        <div className="space-y-2 mb-4">
+                          {f.highlight && <p className="text-sm text-supporting-grey italic">Highlight: {f.highlight}</p>}
+                          {f.source && <p className="text-[10px] text-supporting-grey uppercase tracking-widest">Source: {f.source}</p>}
+                          {f.recommend !== undefined && (
+                            <p className="text-[10px] text-supporting-grey uppercase tracking-widest flex items-center gap-1">
+                              Recommend: {f.recommend ? <ThumbsUp size={10} className="text-emerald-400" /> : <ThumbsDown size={10} className="text-red-400" />}
+                            </p>
+                          )}
+                        </div>
+                        {f.guestName && (
+                          <div className="mb-6 pt-4 border-t border-white/5 flex items-center gap-2">
+                            <User size={12} className="text-red-400" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">{f.guestName} {f.guestEmail && `(${f.guestEmail})`}</span>
+                          </div>
+                        )}
+                        <div className="flex gap-6">
+                          <button className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-white transition-colors">Reply via Email</button>
+                          <button className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-emerald-400 transition-colors">Resolve</button>
                         </div>
                       </div>
                     ))
@@ -667,26 +1160,26 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
         )}
 
         {activeTab === 'settings' && (
-          <Card className="max-w-4xl">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-6">
-                <h3 className="font-bold text-lg border-b pb-2">Branding</h3>
+          <Card className="max-w-5xl">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              <div className="space-y-8">
+                <h3 className="text-xl font-black uppercase tracking-tight border-b border-white/5 pb-4">Branding</h3>
                 <Input label="Hotel Name" value={form.hotelName} onChange={v => setForm({...form, hotelName: v})} />
                 <Input label="Logo URL" value={form.logoUrl || ''} onChange={v => setForm({...form, logoUrl: v})} placeholder="https://..." />
                 <Input label="Primary Color" type="color" value={form.primaryColor} onChange={v => setForm({...form, primaryColor: v})} />
                 <Input label="Welcome Line" value={form.welcomeLine} onChange={v => setForm({...form, welcomeLine: v})} />
-                <Input label="Admin Email (for feedback)" value={form.adminEmail} onChange={v => setForm({...form, adminEmail: v})} />
+                <Input label="Admin Email" value={form.adminEmail} onChange={v => setForm({...form, adminEmail: v})} />
               </div>
-              <div className="space-y-6">
-                <h3 className="font-bold text-lg border-b pb-2">Social Links</h3>
+              <div className="space-y-8">
+                <h3 className="text-xl font-black uppercase tracking-tight border-b border-white/5 pb-4">Social Links</h3>
                 <Input label="Google Review Link" value={form.googleLink || ''} onChange={v => setForm({...form, googleLink: v})} />
                 <Input label="TripAdvisor Link" value={form.tripAdvisorLink || ''} onChange={v => setForm({...form, tripAdvisorLink: v})} />
                 <Input label="Yelp Link" value={form.yelpLink || ''} onChange={v => setForm({...form, yelpLink: v})} />
                 <Input label="Facebook Link" value={form.facebookLink || ''} onChange={v => setForm({...form, facebookLink: v})} />
               </div>
             </div>
-            <div className="mt-12 pt-6 border-t flex justify-end">
-              <Button onClick={handleSaveSettings} disabled={isSaving} className="w-full md:w-auto">
+            <div className="mt-16 pt-8 border-t border-white/5 flex justify-end">
+              <Button onClick={handleSaveSettings} disabled={isSaving} variant="accent" className="w-full md:w-auto uppercase tracking-widest">
                 {isSaving ? 'Saving...' : 'Save All Changes'}
               </Button>
             </div>
@@ -694,37 +1187,37 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
         )}
 
         {activeTab === 'qr' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <Card className="flex flex-col items-center justify-center p-8 md:p-12">
-              <div className="p-4 md:p-8 bg-white rounded-3xl border-4 md:border-8 border-zinc-100 shadow-xl mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <Card className="flex flex-col items-center justify-center p-12 md:p-20">
+              <div className="p-8 md:p-12 bg-white rounded-[40px] shadow-[0_0_60px_rgba(255,255,255,0.1)] mb-12">
                 <QRCodeSVG 
                   value={`${window.location.origin}/?hotelId=${hotelId}`} 
-                  size={window.innerWidth < 768 ? 160 : 200}
+                  size={window.innerWidth < 768 ? 200 : 280}
                   level="H"
                   includeMargin={true}
                 />
               </div>
-              <h3 className="text-xl font-bold mb-2">Scan to Rate</h3>
-              <p className="text-zinc-400 text-sm mb-8 text-center">Point your camera to start the flow</p>
-              <Button variant="outline" className="flex items-center gap-2 w-full md:w-auto justify-center">
-                <Download size={18} />
+              <h3 className="text-3xl font-black mb-4 uppercase tracking-tighter">Scan to Rate</h3>
+              <p className="text-supporting-grey font-medium mb-12 text-center">Point your camera to start the flow</p>
+              <Button variant="outline" className="flex items-center gap-3 w-full md:w-auto justify-center uppercase tracking-widest text-sm">
+                <Download size={20} />
                 Download PNG
               </Button>
             </Card>
-            <div className="space-y-6">
+            <div className="space-y-8">
               <Card>
-                <h3 className="font-bold mb-4">QR Customization</h3>
-                <p className="text-zinc-500 text-sm mb-6">Print this QR code on keycards, menus, or lobby signs to capture real-time feedback.</p>
+                <h3 className="text-xl font-black uppercase tracking-tight mb-6">QR Customization</h3>
+                <p className="text-supporting-grey font-medium mb-10 leading-relaxed">Print this QR code on keycards, menus, or lobby signs to capture real-time feedback.</p>
                 <div className="space-y-4">
-                  <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
-                    <span className="text-sm font-medium">Include Logo</span>
-                    <div className="w-10 h-5 bg-black rounded-full relative">
-                      <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
+                  <div className="p-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
+                    <span className="text-sm font-bold uppercase tracking-widest">Include Logo</span>
+                    <div className="w-12 h-6 bg-pink rounded-full relative">
+                      <div className="absolute right-1.5 top-1.5 w-3 h-3 bg-black rounded-full" />
                     </div>
                   </div>
-                  <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
-                    <span className="text-sm font-medium">Custom Text</span>
-                    <span className="text-xs text-zinc-400">"How was your stay?"</span>
+                  <div className="p-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
+                    <span className="text-sm font-bold uppercase tracking-widest">Custom Text</span>
+                    <span className="text-xs text-supporting-grey font-bold uppercase tracking-widest">"How was your stay?"</span>
                   </div>
                 </div>
               </Card>
@@ -732,40 +1225,202 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
           </div>
         )}
 
+        {activeTab === 'promos' && (
+          <div className="space-y-8">
+            <Card className="max-w-2xl">
+              <h3 className="text-xl font-black uppercase tracking-tight mb-8">Add New Slide</h3>
+              <div className="space-y-6">
+                <Input label="Title" value={promoForm.title || ''} onChange={v => setPromoForm({...promoForm, title: v})} />
+                <Input label="Description" value={promoForm.description || ''} onChange={v => setPromoForm({...promoForm, description: v})} />
+                <Input label="Image URL" value={promoForm.imageUrl || ''} onChange={v => setPromoForm({...promoForm, imageUrl: v})} />
+                <div className="grid grid-cols-2 gap-4">
+                  <Input label="Button Text" value={promoForm.buttonText || ''} onChange={v => setPromoForm({...promoForm, buttonText: v})} />
+                  <Input label="Button Link" value={promoForm.buttonLink || ''} onChange={v => setPromoForm({...promoForm, buttonLink: v})} />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-supporting-grey">Slide Type</label>
+                  <select 
+                    value={promoForm.type} 
+                    onChange={(e) => setPromoForm({...promoForm, type: e.target.value as any})}
+                    className="w-full p-4 bg-white/5 rounded-2xl border border-white/5 text-white focus:outline-none focus:ring-2 focus:ring-pink"
+                  >
+                    <option value="promo" className="bg-charcoal">Promotion</option>
+                    <option value="news" className="bg-charcoal">News/Update</option>
+                    <option value="newsletter" className="bg-charcoal">Newsletter Signup</option>
+                    <option value="blog" className="bg-charcoal">Blog Post</option>
+                  </select>
+                </div>
+                <Button onClick={handleAddPromo} variant="accent" className="w-full uppercase tracking-widest">Add Slide</Button>
+              </div>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {promos.map(p => (
+                <Card key={p.id} className="relative group">
+                  <div className="flex justify-between items-start mb-6">
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
+                      p.type === 'newsletter' ? "bg-blue/10 text-blue border-blue/20" : 
+                      p.type === 'blog' ? "bg-pink/10 text-pink border-pink/20" :
+                      "bg-emerald-400/10 text-emerald-400 border-emerald-400/20"
+                    )}>
+                      {p.type}
+                    </span>
+                    <button 
+                      onClick={() => togglePromo(p.id, !p.active)}
+                      className={cn(
+                        "text-[10px] font-black uppercase tracking-widest",
+                        p.active ? "text-emerald-400" : "text-supporting-grey"
+                      )}
+                    >
+                      {p.active ? 'Active' : 'Paused'}
+                    </button>
+                  </div>
+                  <h4 className="text-xl font-black uppercase tracking-tight mb-2">{p.title}</h4>
+                  <p className="text-sm text-supporting-grey line-clamp-2 mb-6">{p.description}</p>
+                  <Button 
+                    variant="outline" 
+                    className="w-full py-3 text-xs uppercase tracking-widest"
+                    onClick={async () => {
+                      if (confirm('Delete this slide?')) {
+                        try {
+                          const { deleteDoc } = await import('firebase/firestore');
+                          await deleteDoc(doc(db, `hotels/${hotelId}/promos`, p.id));
+                        } catch (error) {
+                          handleFirestoreError(error, OperationType.DELETE, `hotels/${hotelId}/promos/${p.id}`);
+                        }
+                      }
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'guests' && (
           <Card className="overflow-hidden">
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
               <div>
-                <h3 className="font-bold">Guest List</h3>
-                <p className="text-zinc-500 text-sm">Upload CSV to send automated review requests.</p>
+                <h3 className="text-2xl font-black uppercase tracking-tight mb-2">Guest Directory</h3>
+                <p className="text-supporting-grey font-medium">All guests who have shared their information.</p>
               </div>
-              <Button variant="outline" className="flex items-center gap-2 w-full md:w-auto justify-center">
-                <Upload size={18} />
-                Upload CSV
+              <Button 
+                variant="outline" 
+                onClick={exportToCSV}
+                className="flex items-center gap-3 w-full md:w-auto justify-center uppercase tracking-widest text-sm"
+              >
+                <Download size={20} />
+                Export CSV
               </Button>
             </div>
             
-            <div className="border rounded-xl overflow-x-auto">
-              <table className="w-full text-left text-sm min-w-[500px]">
-                <thead className="bg-zinc-50 border-b">
+            <div className="border border-white/5 rounded-3xl overflow-x-auto">
+              <table className="w-full text-left text-sm min-w-[800px]">
+                <thead className="bg-white/5 border-b border-white/5">
                   <tr>
-                    <th className="p-4 font-bold">Guest Name</th>
-                    <th className="p-4 font-bold">Email</th>
-                    <th className="p-4 font-bold">Status</th>
-                    <th className="p-4 font-bold">Last Sent</th>
-                    <th className="p-4"></th>
+                    <th className="p-6 font-black uppercase tracking-widest text-[10px] text-supporting-grey">Guest Name</th>
+                    <th className="p-6 font-black uppercase tracking-widest text-[10px] text-supporting-grey">Email</th>
+                    <th className="p-6 font-black uppercase tracking-widest text-[10px] text-supporting-grey">Source</th>
+                    <th className="p-6 font-black uppercase tracking-widest text-[10px] text-supporting-grey">Last Interaction</th>
+                    <th className="p-6 font-black uppercase tracking-widest text-[10px] text-supporting-grey">Date</th>
+                    <th className="p-6"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
-                  <GuestRow name="John Smith" email="john@example.com" status="Sent" date="2 hours ago" />
-                  <GuestRow name="Sarah Miller" email="sarah.m@gmail.com" status="Opened" date="5 hours ago" />
-                  <GuestRow name="David Chen" email="dchen@work.com" status="Rated" date="Yesterday" />
+                <tbody className="divide-y divide-white/5">
+                  {guestList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-12 text-center text-supporting-grey font-bold uppercase tracking-widest text-xs">No guests found.</td>
+                    </tr>
+                  ) : (
+                    guestList.map(g => (
+                      <tr key={g.email} className="hover:bg-white/5 transition-colors">
+                        <td className="p-6 font-bold tracking-tight">{g.name}</td>
+                        <td className="p-6 text-supporting-grey font-medium">{g.email}</td>
+                        <td className="p-6 text-supporting-grey text-xs font-bold uppercase tracking-widest">{g.source || 'N/A'}</td>
+                        <td className="p-6">
+                          <span className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
+                            g.type === 'Review' ? "bg-emerald-400/10 text-emerald-400 border-emerald-400/20" : 
+                            g.type === 'Feedback' ? "bg-red-400/10 text-red-400 border-red-400/20" : 
+                            "bg-blue/10 text-blue border-blue/20"
+                          )}>
+                            {g.type}
+                          </span>
+                        </td>
+                        <td className="p-6 text-supporting-grey text-xs font-bold uppercase tracking-widest">{new Date(g.timestamp).toLocaleDateString()}</td>
+                        <td className="p-6 text-right">
+                          <button 
+                            onClick={() => setSelectedGuest(g)}
+                            className="p-2 text-supporting-grey hover:text-white transition-colors"
+                          >
+                            <ChevronRight size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </Card>
         )}
       </main>
+
+      {/* Guest Details Modal */}
+      <AnimatePresence>
+        {selectedGuest && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedGuest(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="max-w-xl w-full bg-charcoal border border-white/10 rounded-[40px] p-12 relative z-10 overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-pink" />
+              <div className="flex justify-between items-start mb-12">
+                <div className="w-20 h-20 bg-pink rounded-3xl flex items-center justify-center rotate-3">
+                  <User size={40} className="text-black" />
+                </div>
+                <button onClick={() => setSelectedGuest(null)} className="p-2 text-supporting-grey hover:text-white">
+                  <Trash2 size={24} />
+                </button>
+              </div>
+
+              <h3 className="text-4xl font-black uppercase tracking-tighter mb-2">{selectedGuest.name}</h3>
+              <p className="text-pink font-bold uppercase tracking-widest text-sm mb-12">{selectedGuest.email}</p>
+
+              <div className="grid grid-cols-2 gap-8 mb-12">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-supporting-grey block mb-2">Source</label>
+                  <p className="font-bold">{selectedGuest.source || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-supporting-grey block mb-2">Last Interaction</label>
+                  <p className="font-bold">{selectedGuest.type}</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-supporting-grey block mb-2">Date</label>
+                  <p className="font-bold">{new Date(selectedGuest.timestamp).toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              <Button onClick={() => setSelectedGuest(null)} variant="accent" className="w-full uppercase tracking-widest">
+                Close Profile
+              </Button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -775,14 +1430,14 @@ function MobileNavItem({ active, icon, label, onClick }: { active: boolean, icon
     <button 
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center gap-1 p-2 rounded-xl transition-all flex-1",
-        active ? "text-black" : "text-zinc-400"
+        "flex flex-col items-center gap-2 p-2 rounded-2xl transition-all flex-1",
+        active ? "text-pink" : "text-supporting-grey"
       )}
     >
-      <div className={cn("p-2 rounded-xl transition-all", active && "bg-zinc-100")}>
+      <div className={cn("p-3 rounded-2xl transition-all", active && "bg-pink/10")}>
         {icon}
       </div>
-      <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+      <span className="text-[9px] font-black uppercase tracking-widest">{label}</span>
     </button>
   );
 }
@@ -792,50 +1447,49 @@ function NavItem({ active, icon, label, onClick }: { active: boolean, icon: Reac
     <button 
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 w-full p-3 rounded-xl transition-all",
-        active ? "bg-black text-white shadow-lg shadow-black/10" : "text-zinc-500 hover:bg-zinc-100"
+        "flex items-center gap-4 w-full p-4 rounded-2xl transition-all font-bold uppercase tracking-widest text-xs",
+        active ? "bg-pink text-black shadow-[0_0_30px_rgba(255,131,218,0.2)]" : "text-supporting-grey hover:bg-white/5 hover:text-white"
       )}
     >
       {icon}
-      <span className="font-medium">{label}</span>
+      <span>{label}</span>
     </button>
   );
 }
 
 function Input({ label, value, onChange, type = 'text', placeholder }: { label: string, value: string, onChange: (v: string) => void, type?: string, placeholder?: string }) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">{label}</label>
+    <div className="space-y-3">
+      <label className="text-[10px] font-black uppercase tracking-widest text-supporting-grey">{label}</label>
       <input 
         type={type} 
         value={value} 
         onChange={(e) => onChange(e.target.value)} 
         placeholder={placeholder}
-        className="w-full p-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-black transition-all"
+        className="w-full p-4 bg-white/5 rounded-2xl border border-white/5 text-white focus:outline-none focus:ring-2 focus:ring-pink transition-all placeholder:text-white/10 font-medium"
       />
     </div>
   );
 }
 
 function GuestRow({ name, email, status, date }: { name: string, email: string, status: string, date: string }) {
-  const statusColors = {
-    'Sent': 'bg-zinc-100 text-zinc-600',
-    'Opened': 'bg-blue-50 text-blue-600',
-    'Rated': 'bg-green-50 text-green-600',
-  };
-
   return (
-    <tr className="hover:bg-zinc-50/50 transition-colors">
-      <td className="p-4 font-medium">{name}</td>
-      <td className="p-4 text-zinc-500">{email}</td>
-      <td className="p-4">
-        <span className={cn("px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider", (statusColors as any)[status])}>
+    <tr className="hover:bg-white/5 transition-colors group">
+      <td className="p-6 font-bold tracking-tight">{name}</td>
+      <td className="p-6 text-supporting-grey font-medium">{email}</td>
+      <td className="p-6">
+        <span className={cn(
+          "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
+          status === 'Rated' ? "bg-emerald-400/10 text-emerald-400 border-emerald-400/20" : 
+          status === 'Opened' ? "bg-blue/10 text-blue border-blue/20" : 
+          "bg-white/5 text-supporting-grey border-white/10"
+        )}>
           {status}
         </span>
       </td>
-      <td className="p-4 text-zinc-400 text-xs">{date}</td>
-      <td className="p-4 text-right">
-        <button className="text-zinc-300 hover:text-black transition-colors">
+      <td className="p-6 text-supporting-grey text-xs font-bold uppercase tracking-widest">{date}</td>
+      <td className="p-6 text-right">
+        <button className="p-2 text-supporting-grey hover:text-white transition-colors">
           <ChevronRight size={18} />
         </button>
       </td>
@@ -845,9 +1499,9 @@ function GuestRow({ name, email, status, date }: { name: string, email: string, 
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="py-12 text-center">
-      <MessageSquare className="w-8 h-8 text-zinc-200 mx-auto mb-3" />
-      <p className="text-sm text-zinc-400">{message}</p>
+    <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-3xl">
+      <p className="text-supporting-grey font-bold uppercase tracking-widest text-xs">{message}</p>
     </div>
   );
 }
+

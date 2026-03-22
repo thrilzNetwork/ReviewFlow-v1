@@ -24,6 +24,11 @@
       "properties": {
         "rating": { "type": "number", "description": "1-5 star rating" },
         "oneWord": { "type": "string", "description": "Short feedback" },
+        "highlight": { "type": "string", "description": "What was the highlight of the stay?" },
+        "source": { "type": "string", "description": "How did they hear about us?" },
+        "recommend": { "type": "boolean", "description": "Would they recommend us?" },
+        "guestName": { "type": "string", "description": "Optional guest name" },
+        "guestEmail": { "type": "string", "description": "Optional guest email" },
         "timestamp": { "type": "string", "format": "date-time" },
         "guestId": { "type": "string" }
       },
@@ -36,11 +41,42 @@
       "properties": {
         "rating": { "type": "number" },
         "comment": { "type": "string" },
+        "highlight": { "type": "string", "description": "What was the highlight of the stay?" },
+        "source": { "type": "string", "description": "How did they hear about us?" },
+        "recommend": { "type": "boolean", "description": "Would they recommend us?" },
+        "guestName": { "type": "string", "description": "Optional guest name" },
+        "guestEmail": { "type": "string", "description": "Optional guest email" },
         "timestamp": { "type": "string", "format": "date-time" },
         "guestId": { "type": "string" },
         "resolved": { "type": "boolean" }
       },
       "required": ["rating", "comment", "timestamp"]
+    },
+    "Promo": {
+      "title": "Promotion Slide",
+      "description": "A slide shown at the end of the review flow.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "buttonText": { "type": "string" },
+        "buttonLink": { "type": "string" },
+        "type": { "type": "string", "enum": ["promo", "news", "newsletter"] },
+        "active": { "type": "boolean" }
+      },
+      "required": ["title", "type", "active"]
+    },
+    "NewsletterSignup": {
+      "title": "Newsletter Signup",
+      "description": "Guest signup for news and updates.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "timestamp"]
     }
   },
   "firestore": {
@@ -55,6 +91,14 @@
     "/hotels/{hotelId}/feedback/{feedbackId}": {
       "schema": "Feedback",
       "description": "Negative feedback for a hotel."
+    },
+    "/hotels/{hotelId}/promos/{promoId}": {
+      "schema": "Promo",
+      "description": "Promotional slides for a hotel."
+    },
+    "/hotels/{hotelId}/signups/{signupId}": {
+      "schema": "NewsletterSignup",
+      "description": "Newsletter signups for a hotel."
     }
   }
 }
