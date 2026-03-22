@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isHotelAdmin(hotelId) {
+      return isAuthenticated() && request.auth.uid == hotelId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidSettings(data) {
+      return data.hotelName is string && data.hotelName.size() > 0 && data.hotelName.size() < 100 &&
+             data.adminEmail is string && isValidEmail(data.adminEmail) &&
+             (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() < 500)) &&
+             (!('primaryColor' in data) || (data.primaryColor is string && data.primaryColor.size() < 20)) &&
+             (!('welcomeLine' in data) || (data.welcomeLine is string && data.welcomeLine.size() < 200)) &&
+             (!('googleLink' in data) || (data.googleLink is string && data.googleLink.size() < 500)) &&
+             (!('tripAdvisorLink' in data) || (data.tripAdvisorLink is string && data.tripAdvisorLink.size() < 500)) &&
+             (!('yelpLink' in data) || (data.yelpLink is string && data.yelpLink.size() < 500)) &&
+             (!('facebookLink' in data) || (data.facebookLink is string && data.facebookLink.size() < 500));
+    }
+
+    function isValidReview(data) {
+      return data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             (!('oneWord' in data) || (data.oneWord is string && data.oneWord.size() < 100)) &&
+             data.timestamp is string && data.timestamp.size() < 100;
+    }
+
+    function isValidFeedback(data) {
+      return data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
+             data.timestamp is string && data.timestamp.size() < 100;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /hotels/{hotelId}/settings/config {
+      allow read: if true;
+      allow write: if isHotelAdmin(hotelId) && isValidSettings(request.resource.data);
+    }
+
+    match /hotels/{hotelId}/reviews/{reviewId} {
+      allow read: if isHotelAdmin(hotelId);
+      allow create: if isValidReview(request.resource.data);
+      allow update, delete: if isHotelAdmin(hotelId);
+    }
+
+    match /hotels/{hotelId}/feedback/{feedbackId} {
+      allow read: if isHotelAdmin(hotelId);
+      allow create: if isValidFeedback(request.resource.data);
+      allow update, delete: if isHotelAdmin(hotelId);
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "HotelSettings": {
+      "title": "Hotel Settings",
+      "description": "Configuration for the Review Flow experience.",
+      "type": "object",
+      "properties": {
+        "hotelName": { "type": "string", "description": "Name of the hotel" },
+        "logoUrl": { "type": "string", "description": "URL to the hotel logo" },
+        "primaryColor": { "type": "string", "description": "Primary theme color" },
+        "welcomeLine": { "type": "string", "description": "Welcome message for guests" },
+        "googleLink": { "type": "string", "description": "Google Review link" },
+        "tripAdvisorLink": { "type": "string", "description": "TripAdvisor link" },
+        "yelpLink": { "type": "string", "description": "Yelp link" },
+        "facebookLink": { "type": "string", "description": "Facebook link" },
+        "adminEmail": { "type": "string", "description": "Email for private feedback" }
+      },
+      "required": ["hotelName", "adminEmail"]
+    },
+    "Review": {
+      "title": "Guest Review",
+      "description": "Public-facing positive reviews.",
+      "type": "object",
+      "properties": {
+        "rating": { "type": "number", "description": "1-5 star rating" },
+        "oneWord": { "type": "string", "description": "Short feedback" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "guestId": { "type": "string" }
+      },
+      "required": ["rating", "timestamp"]
+    },
+    "Feedback": {
+      "title": "Private Feedback",
+      "description": "Private negative feedback for internal resolution.",
+      "type": "object",
+      "properties": {
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "guestId": { "type": "string" },
+        "resolved": { "type": "boolean" }
+      },
+      "required": ["rating", "comment", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/hotels/{hotelId}/settings/config": {
+      "schema": "HotelSettings",
+      "description": "The configuration for a specific hotel."
+    },
+    "/hotels/{hotelId}/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Positive reviews for a hotel."
+    },
+    "/hotels/{hotelId}/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Negative feedback for a hotel."
+    }
+  }
+}
