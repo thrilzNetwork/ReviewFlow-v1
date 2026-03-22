@@ -148,7 +148,7 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       return params.get('hotelId') ? 'guest' : 'admin';
     }
-    return 'guest';
+    return 'admin';
   });
   const [hotelId, setHotelId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
@@ -161,7 +161,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Sync URL changes (e.g. if user scans QR while app is open)
+  // Sync URL changes
   useEffect(() => {
     const handleUrlChange = () => {
       const params = new URLSearchParams(window.location.search);
@@ -184,51 +184,28 @@ export default function App() {
       setUser(u);
       setIsAuthReady(true);
       
-      // If we are in guest view, we don't need to wait for auth to stop loading
-      // Loading is handled by the settings fetcher for guests
-      if (view === 'guest') {
-        return;
-      }
-
-      if (u && !hotelId) {
+      if (u && !hotelId && view === 'admin') {
         setHotelId(u.uid);
       }
       
-      // If we are in admin view and not logged in, we can stop loading
-      if (!u && view === 'admin') {
+      // If we are in admin view, we need auth to stop loading
+      if (view === 'admin') {
         setLoading(false);
       }
     });
     return () => unsubscribe();
   }, [hotelId, view]);
 
-  // Test connection
-  useEffect(() => {
-    const testConnection = async () => {
-      try {
-        const { getDocFromServer } = await import('firebase/firestore');
-        await getDocFromServer(doc(db, 'test', 'connection'));
-        console.log("Firestore connection successful.");
-      } catch (error: any) {
-        if (error.message?.includes('client is offline')) {
-          console.error("Firebase configuration error: client is offline.");
-          setAuthError("Firebase connection error. Please check your network or configuration.");
-        }
-      }
-    };
-    testConnection();
-  }, []);
-
   // Fetch settings
   useEffect(() => {
-    if (!hotelId) return;
+    if (!hotelId) {
+      if (view === 'admin') setLoading(false);
+      return;
+    }
 
-    setLoading(true);
     const unsubscribe = onSnapshot(doc(db, `hotels/${hotelId}/settings/config`), (docSnap) => {
       if (docSnap.exists()) {
         setSettings(docSnap.data() as HotelSettings);
-      } else {
-        setSettings(null);
       }
       setLoading(false);
     }, (error) => {
@@ -237,7 +214,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [hotelId]);
+  }, [hotelId, view]);
 
   const handleSignIn = async () => {
     setAuthError(null);
@@ -249,35 +226,20 @@ export default function App() {
     }
   };
 
-  if (loading && hotelId && !settings) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-black overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,131,218,0.05),transparent_70%)]" />
-        <div className="relative flex flex-col items-center gap-8">
-          <motion.div 
-            animate={{ 
-              scale: [1, 1.1, 1],
-              opacity: [0.3, 1, 0.3]
-            }}
-            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-            className="w-20 h-20 bg-pink rounded-3xl rotate-3 shadow-[0_0_40px_rgba(255,131,218,0.2)] flex items-center justify-center"
-          >
-            <Star className="text-black w-10 h-10 fill-black" />
-          </motion.div>
-          <motion.div 
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ repeat: Infinity, duration: 2, delay: 0.5 }}
-            className="text-white font-black text-xl tracking-tighter uppercase"
-          >
-            Loading Experience
-          </motion.div>
-        </div>
-      </div>
-    );
-  }
-
   if (view === 'guest' && hotelId) {
     return <GuestFlow hotelId={hotelId} settings={settings} />;
+  }
+
+  if (loading && !isAuthReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-8 h-8 border-2 border-pink border-t-transparent rounded-full"
+        />
+      </div>
+    );
   }
 
   return <AdminDashboard user={user} hotelId={hotelId} settings={settings} onSignIn={handleSignIn} authError={authError} />;
@@ -389,12 +351,13 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
 
   if (!settings) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 text-center">
-        <Card className="max-w-md">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h1 className="text-xl font-bold mb-2">Hotel Not Found</h1>
-          <p className="text-zinc-500">This review link appears to be invalid or expired.</p>
-        </Card>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,131,218,0.05),transparent_70%)]" />
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-8 h-8 border-2 border-pink border-t-transparent rounded-full relative z-10"
+        />
       </div>
     );
   }
@@ -1066,20 +1029,6 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
     }
   };
 
-  const toggleResolved = async (id: string, currentStatus: boolean) => {
-    if (!hotelId) return;
-    try {
-      await updateDoc(doc(db, `hotels/${hotelId}/feedback`, id), { resolved: !currentStatus });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `hotels/${hotelId}/feedback/${id}`);
-    }
-  };
-
-  const [qrConfig, setQrConfig] = useState({
-    includeLogo: true,
-    customText: 'Scan to Review'
-  });
-
   if (!user) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4 font-soehne">
@@ -1316,23 +1265,8 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
                           </div>
                         )}
                         <div className="flex gap-8">
-                          {f.guestEmail && (
-                            <a 
-                              href={`mailto:${f.guestEmail}?subject=Feedback regarding your stay at ${settings?.hotelName}&body=Hi ${f.guestName || 'there'},%0D%0A%0D%0AThank you for your feedback...`}
-                              className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-white transition-colors"
-                            >
-                              Reply
-                            </a>
-                          )}
-                          <button 
-                            onClick={() => toggleResolved(f.id, f.resolved)}
-                            className={cn(
-                              "text-[10px] font-black uppercase tracking-widest transition-colors",
-                              f.resolved ? "text-emerald-400" : "text-supporting-grey hover:text-emerald-400"
-                            )}
-                          >
-                            {f.resolved ? 'Resolved' : 'Resolve'}
-                          </button>
+                          <button className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-white transition-colors">Reply</button>
+                          <button className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-emerald-400 transition-colors">Resolve</button>
                         </div>
                       </motion.div>
                     ))
@@ -1373,50 +1307,17 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
         {activeTab === 'qr' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             <Card className="flex flex-col items-center justify-center p-12 md:p-20">
-              <div className="p-8 md:p-12 bg-white rounded-[40px] shadow-[0_0_60px_rgba(255,255,255,0.1)] mb-12 relative group overflow-hidden">
-                <div className="absolute inset-0 bg-pink/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="p-8 md:p-12 bg-white rounded-[40px] shadow-[0_0_60px_rgba(255,255,255,0.1)] mb-12">
                 <QRCodeSVG 
-                  id="hotel-qr-code"
                   value={`${window.location.origin}/?hotelId=${hotelId}`} 
                   size={window.innerWidth < 768 ? 200 : 280}
                   level="H"
                   includeMargin={true}
-                  imageSettings={qrConfig.includeLogo && settings?.logoUrl ? {
-                    src: settings.logoUrl,
-                    x: undefined,
-                    y: undefined,
-                    height: 60,
-                    width: 60,
-                    excavate: true,
-                  } : undefined}
                 />
               </div>
-              <h3 className="text-3xl font-black mb-4 uppercase tracking-tighter">{qrConfig.customText}</h3>
+              <h3 className="text-3xl font-black mb-4 uppercase tracking-tighter">Scan to Rate</h3>
               <p className="text-supporting-grey font-medium mb-12 text-center">Point your camera to start the flow</p>
-              <Button 
-                variant="outline" 
-                className="flex items-center gap-3 w-full md:w-auto justify-center uppercase tracking-widest text-sm"
-                onClick={() => {
-                  const svg = document.getElementById('hotel-qr-code');
-                  if (svg) {
-                    const svgData = new XMLSerializer().serializeToString(svg);
-                    const canvas = document.createElement("canvas");
-                    const ctx = canvas.getContext("2d");
-                    const img = new Image();
-                    img.onload = () => {
-                      canvas.width = img.width;
-                      canvas.height = img.height;
-                      ctx?.drawImage(img, 0, 0);
-                      const pngFile = canvas.toDataURL("image/png");
-                      const downloadLink = document.createElement("a");
-                      downloadLink.download = `${settings?.hotelName || 'hotel'}-qr.png`;
-                      downloadLink.href = pngFile;
-                      downloadLink.click();
-                    };
-                    img.src = "data:image/svg+xml;base64," + btoa(svgData);
-                  }
-                }}
-              >
+              <Button variant="outline" className="flex items-center gap-3 w-full md:w-auto justify-center uppercase tracking-widest text-sm">
                 <Download size={20} />
                 Download PNG
               </Button>
@@ -1427,32 +1328,14 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
                 <p className="text-supporting-grey font-medium mb-10 leading-relaxed">Print this QR code on keycards, menus, or lobby signs to capture real-time feedback.</p>
                 <div className="space-y-4">
                   <div className="p-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
-                    <div>
-                      <span className="text-sm font-bold uppercase tracking-widest block mb-1">Include Logo</span>
-                      <p className="text-[10px] text-supporting-grey font-medium uppercase tracking-widest">Show hotel branding in center</p>
+                    <span className="text-sm font-bold uppercase tracking-widest">Include Logo</span>
+                    <div className="w-12 h-6 bg-pink rounded-full relative">
+                      <div className="absolute right-1.5 top-1.5 w-3 h-3 bg-black rounded-full" />
                     </div>
-                    <button 
-                      onClick={() => setQrConfig({...qrConfig, includeLogo: !qrConfig.includeLogo})}
-                      className={cn(
-                        "w-12 h-6 rounded-full transition-all relative",
-                        qrConfig.includeLogo ? "bg-pink" : "bg-white/10"
-                      )}
-                    >
-                      <motion.div 
-                        animate={{ x: qrConfig.includeLogo ? 24 : 4 }}
-                        className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-lg"
-                      />
-                    </button>
                   </div>
-                  <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-4">
-                    <span className="text-sm font-bold uppercase tracking-widest block">Custom Text</span>
-                    <input 
-                      type="text"
-                      value={qrConfig.customText}
-                      onChange={(e) => setQrConfig({...qrConfig, customText: e.target.value})}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-pink transition-all"
-                      placeholder="e.g. Scan to Rate"
-                    />
+                  <div className="p-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
+                    <span className="text-sm font-bold uppercase tracking-widest">Custom Text</span>
+                    <span className="text-xs text-supporting-grey font-bold uppercase tracking-widest">"How was your stay?"</span>
                   </div>
                 </div>
               </Card>
