@@ -49,6 +49,7 @@ service cloud.firestore {
              (!('recommend' in data) || (data.recommend is bool)) &&
              (!('guestName' in data) || (data.guestName is string && data.guestName.size() < 100)) &&
              (!('guestEmail' in data) || (data.guestEmail is string && data.guestEmail.size() < 200)) &&
+             (!('resolved' in data) || (data.resolved is bool)) &&
              data.timestamp is string && data.timestamp.size() < 100;
     }
 
