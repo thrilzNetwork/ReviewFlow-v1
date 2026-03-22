@@ -148,6 +148,23 @@ export default function App() {
     return () => unsubscribe();
   }, [hotelId, view]);
 
+  // Test connection
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        const { getDocFromServer } = await import('firebase/firestore');
+        await getDocFromServer(doc(db, 'test', 'connection'));
+        console.log("Firestore connection successful.");
+      } catch (error: any) {
+        if (error.message?.includes('client is offline')) {
+          console.error("Firebase configuration error: client is offline.");
+          setAuthError("Firebase connection error. Please check your network or configuration.");
+        }
+      }
+    };
+    testConnection();
+  }, []);
+
   // Fetch settings
   useEffect(() => {
     if (!hotelId) return;
