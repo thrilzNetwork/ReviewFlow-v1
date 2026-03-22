@@ -378,32 +378,33 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
       <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-blue/10 blur-[150px] rounded-full pointer-events-none" />
       <div className="absolute top-[30%] right-[-10%] w-[30%] h-[30%] bg-yellow/5 blur-[100px] rounded-full pointer-events-none" />
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="popLayout">
         {step === 'welcome' && (
           <motion.div 
             key="welcome"
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -40 }}
-            className="max-w-md w-full text-center z-10"
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 1.05, y: -10 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="max-w-md w-full text-center z-10 px-4"
           >
             {settings.logoUrl && (
               <motion.img 
-                initial={{ scale: 0.8 }}
-                animate={{ scale: 1 }}
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
                 src={settings.logoUrl} 
                 alt="Logo" 
-                className="h-20 mx-auto mb-12 object-contain filter invert" 
+                className="h-16 md:h-20 mx-auto mb-10 object-contain filter invert" 
                 referrerPolicy="no-referrer" 
               />
             )}
-            <h1 className="text-5xl font-black tracking-tighter mb-6 leading-tight uppercase">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter mb-6 leading-tight uppercase">
               {settings.welcomeLine}
             </h1>
-            <p className="text-supporting-grey text-lg mb-12 font-medium">
+            <p className="text-supporting-grey text-lg mb-10 font-medium">
               We loved having you. How was your stay?
             </p>
-            <Button onClick={() => setStep('rating')} variant="accent" className="w-full py-5 text-xl uppercase tracking-widest">
+            <Button onClick={() => setStep('rating')} variant="accent" className="w-full py-6 text-xl uppercase tracking-widest shadow-[0_10px_30px_rgba(255,0,255,0.3)]">
               Start Review
             </Button>
           </motion.div>
@@ -412,60 +413,64 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
         {step === 'rating' && (
           <motion.div 
             key="rating"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="max-w-md w-full text-center z-10"
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 1.1, y: -20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="max-w-md w-full text-center z-10 px-4"
           >
             <motion.div 
               key={hoverRating || rating}
-              initial={{ scale: 0.5, opacity: 0, y: 20 }}
+              initial={{ scale: 0.5, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              className="text-9xl mb-12 drop-shadow-[0_10px_30px_rgba(255,255,255,0.1)]"
+              className="text-8xl md:text-9xl mb-10 drop-shadow-[0_10px_30px_rgba(255,255,255,0.1)]"
             >
               {getEmoji(hoverRating || rating)}
             </motion.div>
-            <h2 className="text-4xl font-black tracking-tighter mb-16 uppercase">Rate your stay</h2>
-            <div className="flex justify-between mb-16">
+            <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-12 uppercase">Rate your stay</h2>
+            <div className="flex justify-between gap-2 mb-12">
               {[1, 2, 3, 4, 5].map((star) => (
                 <motion.button
                   key={star}
-                  whileHover={{ scale: 1.3, rotate: 5 }}
-                  whileTap={{ scale: 0.9 }}
+                  whileHover={{ scale: 1.2 }}
+                  whileTap={{ scale: 0.85 }}
                   onMouseEnter={() => setHoverRating(star)}
                   onMouseLeave={() => setHoverRating(0)}
                   onClick={() => handleRatingSubmit(star)}
                   className={cn(
-                    "p-2 rounded-full transition-all duration-300",
-                    (hoverRating || rating) >= star ? "text-yellow drop-shadow-[0_0_20px_rgba(232,255,91,0.6)]" : "text-white/10"
+                    "p-3 rounded-2xl transition-all duration-200",
+                    (hoverRating || rating) >= star ? "text-yellow drop-shadow-[0_0_15px_rgba(232,255,91,0.5)]" : "text-white/5"
                   )}
                 >
-                  <Star size={56} fill={(hoverRating || rating) >= star ? "currentColor" : "none"} strokeWidth={1.5} />
+                  <Star size={44} fill={(hoverRating || rating) >= star ? "currentColor" : "none"} strokeWidth={1.5} />
                 </motion.button>
               ))}
             </div>
-            <p className="text-supporting-grey text-sm uppercase tracking-widest font-bold opacity-50">Tap a star to continue</p>
+            <p className="text-supporting-grey text-xs uppercase tracking-widest font-black opacity-40">Tap a star to continue</p>
           </motion.div>
         )}
 
         {step === 'highlight' && (
           <motion.div 
             key="highlight"
-            initial={{ opacity: 0, x: 40 }}
+            initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="max-w-md w-full z-10"
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="max-w-md w-full z-10 px-4"
           >
-            <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">The Highlight?</h2>
-            <p className="text-supporting-grey text-lg mb-10">What was the best part of your stay?</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-4 uppercase">The Highlight?</h2>
+            <p className="text-supporting-grey text-lg mb-8">What was the best part of your stay?</p>
             
             <textarea 
               value={highlight}
               onChange={(e) => setHighlight(e.target.value)}
               placeholder="The breakfast, the view, the staff..."
-              className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink mb-8 min-h-[120px] placeholder:text-white/20"
+              className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink mb-8 min-h-[140px] placeholder:text-white/20 shadow-inner"
               autoFocus
             />
 
-            <Button onClick={handleHighlightSubmit} variant="accent" className="w-full uppercase tracking-widest">
+            <Button onClick={handleHighlightSubmit} variant="accent" className="w-full py-6 uppercase tracking-widest font-black">
               Next
             </Button>
           </motion.div>
@@ -474,35 +479,38 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
         {step === 'oneword' && (
           <motion.div 
             key="oneword"
-            initial={{ opacity: 0, x: 40 }}
+            initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="max-w-md w-full z-10"
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="max-w-md w-full z-10 px-4"
           >
-            <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">Love that!</h2>
-            <p className="text-supporting-grey text-lg mb-10">One word to describe your experience?</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-4 uppercase">Love that!</h2>
+            <p className="text-supporting-grey text-lg mb-8">One word to describe your experience?</p>
             
             <input 
               type="text" 
               value={oneWord}
               onChange={(e) => setOneWord(e.target.value)}
               placeholder="Amazing!"
-              className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-xl focus:outline-none focus:ring-2 focus:ring-pink mb-6 placeholder:text-white/20"
+              className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-xl focus:outline-none focus:ring-2 focus:ring-pink mb-8 placeholder:text-white/20 shadow-inner"
               autoFocus
             />
 
-            <div className="flex flex-wrap gap-3 mb-12">
+            <div className="flex flex-wrap gap-2 mb-10">
               {suggestions.map(s => (
-                <button 
+                <motion.button 
                   key={s}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => setOneWord(s)}
-                  className="px-5 py-2.5 rounded-full bg-white/5 text-white text-sm font-bold hover:bg-pink hover:text-black transition-all uppercase tracking-wider"
+                  className="px-5 py-3 rounded-full bg-white/5 text-white text-sm font-black hover:bg-pink hover:text-black transition-all uppercase tracking-wider border border-white/5"
                 >
                   {s}
-                </button>
+                </motion.button>
               ))}
             </div>
 
-            <Button onClick={() => setStep('moreQuestions')} variant="accent" className="w-full uppercase tracking-widest">
+            <Button onClick={() => setStep('moreQuestions')} variant="accent" className="w-full py-6 uppercase tracking-widest font-black">
               Next
             </Button>
           </motion.div>
@@ -619,38 +627,40 @@ function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSett
         {step === 'shareInfo' && (
           <motion.div 
             key="shareInfo"
-            initial={{ opacity: 0, x: 40 }}
+            initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="max-w-md w-full z-10"
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="max-w-md w-full z-10 px-4"
           >
-            <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">VIP Access?</h2>
-            <p className="text-supporting-grey text-lg mb-10">Share your info for exclusive treats and follow-ups.</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-4 uppercase">VIP Access?</h2>
+            <p className="text-supporting-grey text-lg mb-8">Share your info for exclusive treats and follow-ups.</p>
             
-            <div className="space-y-4 mb-8">
+            <div className="space-y-4 mb-10">
               <input 
                 type="text" 
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
                 placeholder="Your Name"
-                className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink placeholder:text-white/20"
+                className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink placeholder:text-white/20 shadow-inner"
               />
               <input 
                 type="email" 
                 value={guestEmail}
                 onChange={(e) => setGuestEmail(e.target.value)}
                 placeholder="Your Email"
-                className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink placeholder:text-white/20"
+                className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink placeholder:text-white/20 shadow-inner"
               />
             </div>
 
             <div className="flex flex-col gap-4">
-              <Button onClick={handleFinalSubmit} disabled={submitting} variant="accent" className="w-full uppercase tracking-widest">
+              <Button onClick={handleFinalSubmit} disabled={submitting} variant="accent" className="w-full py-6 uppercase tracking-widest font-black">
                 {submitting ? 'Sending...' : 'Join the Circle'}
               </Button>
               <button 
                 onClick={handleFinalSubmit} 
                 disabled={submitting}
-                className="text-supporting-grey hover:text-white transition-colors text-sm font-bold uppercase tracking-widest py-2"
+                className="text-supporting-grey hover:text-white transition-colors text-xs font-black uppercase tracking-widest py-2"
               >
                 Maybe Later
               </button>
@@ -1056,105 +1066,173 @@ function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: {
             <h2 className="text-5xl font-black tracking-tighter uppercase mb-2">{activeTab}</h2>
             <p className="text-supporting-grey font-medium">Manage your hotel's guest experience.</p>
           </div>
-          <div className="flex items-center gap-4 w-full md:w-auto bg-charcoal p-4 rounded-3xl border border-white/5">
+          <div className="flex items-center gap-4 w-full md:w-auto bg-charcoal p-4 rounded-3xl border border-white/5 shadow-xl">
             <div className="text-left md:text-right flex-1 md:flex-none">
               <p className="font-bold text-sm uppercase tracking-tight">{user.displayName}</p>
               <p className="text-xs text-supporting-grey uppercase tracking-widest">{user.email}</p>
             </div>
-            {user.photoURL && <img src={user.photoURL} className="w-12 h-12 rounded-2xl border border-white/10" referrerPolicy="no-referrer" />}
+            {user.photoURL && <img src={user.photoURL} className="w-12 h-12 rounded-2xl border border-white/10 shadow-lg" referrerPolicy="no-referrer" />}
           </div>
         </header>
 
         {activeTab === 'inbox' && (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <Card>
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
-                    <ThumbsUp className="text-emerald-400 w-6 h-6" />
-                    Recent Reviews
+          <div className="space-y-12">
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
+              <div className="bg-charcoal/50 backdrop-blur-md p-8 rounded-[40px] border border-white/5 shadow-xl">
+                <p className="text-[10px] font-black uppercase tracking-widest text-supporting-grey mb-2">Total Reviews</p>
+                <p className="text-4xl font-black tracking-tighter text-emerald-400">{reviews.length}</p>
+              </div>
+              <div className="bg-charcoal/50 backdrop-blur-md p-8 rounded-[40px] border border-white/5 shadow-xl">
+                <p className="text-[10px] font-black uppercase tracking-widest text-supporting-grey mb-2">Avg Rating</p>
+                <p className="text-4xl font-black tracking-tighter text-yellow">
+                  {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : '0.0'}
+                </p>
+              </div>
+              <div className="bg-charcoal/50 backdrop-blur-md p-8 rounded-[40px] border border-white/5 shadow-xl">
+                <p className="text-[10px] font-black uppercase tracking-widest text-supporting-grey mb-2">Private Feedback</p>
+                <p className="text-4xl font-black tracking-tighter text-red-400">{feedback.length}</p>
+              </div>
+              <div className="bg-charcoal/50 backdrop-blur-md p-8 rounded-[40px] border border-white/5 shadow-xl">
+                <p className="text-[10px] font-black uppercase tracking-widest text-supporting-grey mb-2">Guest List</p>
+                <p className="text-4xl font-black tracking-tighter text-pink">{guestList.length}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              <div className="space-y-8">
+                <div className="flex items-center justify-between mb-4 px-2">
+                  <h3 className="text-2xl font-black uppercase tracking-tight flex items-center gap-3">
+                    <ThumbsUp className="text-emerald-400 w-8 h-8" />
+                    Reviews
                   </h3>
-                  <span className="text-[10px] font-black px-3 py-1 bg-emerald-400/10 text-emerald-400 rounded-full uppercase tracking-widest border border-emerald-400/20">{reviews.length} total</span>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {reviews.length === 0 ? (
                     <EmptyState message="No reviews yet." />
                   ) : (
                     reviews.map(r => (
-                      <div key={r.id} className="p-6 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all">
-                        <div className="flex justify-between mb-4">
-                          <div className="flex gap-1.5">
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        key={r.id} 
+                        className="p-8 rounded-[40px] bg-charcoal/50 backdrop-blur-md border border-white/5 hover:border-white/20 transition-all shadow-lg group"
+                      >
+                        <div className="flex justify-between items-start mb-6">
+                          <div className="flex gap-1">
                             {[...Array(5)].map((_, i) => (
-                              <Star key={i} size={16} fill="var(--color-yellow)" className={i < r.rating ? "text-yellow" : "text-white/10"} />
+                              <Star key={i} size={18} fill="var(--color-yellow)" className={i < r.rating ? "text-yellow" : "text-white/5"} />
                             ))}
                           </div>
-                          <span className="text-[10px] font-bold text-supporting-grey uppercase tracking-widest">{new Date(r.timestamp).toLocaleDateString()}</span>
+                          <span className="text-[10px] font-black text-supporting-grey uppercase tracking-widest opacity-50">{new Date(r.timestamp).toLocaleDateString()}</span>
                         </div>
-                        <p className="text-xl font-bold tracking-tight mb-2">"{r.oneWord}"</p>
-                        <div className="space-y-2 mb-4">
-                          {r.highlight && <p className="text-sm text-supporting-grey italic">Highlight: {r.highlight}</p>}
-                          {r.source && <p className="text-[10px] text-supporting-grey uppercase tracking-widest">Source: {r.source}</p>}
-                          {r.recommend !== undefined && (
-                            <p className="text-[10px] text-supporting-grey uppercase tracking-widest flex items-center gap-1">
-                              Recommend: {r.recommend ? <ThumbsUp size={10} className="text-emerald-400" /> : <ThumbsDown size={10} className="text-red-400" />}
-                            </p>
+                        <p className="text-2xl font-black tracking-tight mb-4 leading-tight">"{r.oneWord}"</p>
+                        <div className="space-y-3 mb-8">
+                          {r.highlight && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-pink/50">Highlight</span>
+                              <p className="text-sm font-bold text-white/80">{r.highlight}</p>
+                            </div>
                           )}
+                          <div className="flex flex-wrap gap-4">
+                            {r.source && (
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full">
+                                <Share2 size={10} className="text-supporting-grey" />
+                                <span className="text-[10px] text-supporting-grey font-black uppercase tracking-widest">{r.source}</span>
+                              </div>
+                            )}
+                            {r.recommend !== undefined && (
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full">
+                                {r.recommend ? <ThumbsUp size={10} className="text-emerald-400" /> : <ThumbsDown size={10} className="text-red-400" />}
+                                <span className="text-[10px] text-supporting-grey font-black uppercase tracking-widest">Recommend</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         {r.guestName && (
-                          <div className="pt-4 border-t border-white/5 flex items-center gap-2">
-                            <User size={12} className="text-pink" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">{r.guestName} {r.guestEmail && `(${r.guestEmail})`}</span>
+                          <div className="pt-6 border-t border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-pink/10 rounded-xl flex items-center justify-center">
+                                <User size={14} className="text-pink" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{r.guestName}</p>
+                                <p className="text-[10px] text-supporting-grey font-bold lowercase tracking-tight leading-none">{r.guestEmail}</p>
+                              </div>
+                            </div>
                           </div>
                         )}
-                      </div>
+                      </motion.div>
                     ))
                   )}
                 </div>
-              </Card>
+              </div>
 
-              <Card>
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
-                    <ThumbsDown className="text-red-400 w-6 h-6" />
-                    Private Feedback
+              <div className="space-y-8">
+                <div className="flex items-center justify-between mb-4 px-2">
+                  <h3 className="text-2xl font-black uppercase tracking-tight flex items-center gap-3">
+                    <ThumbsDown className="text-red-400 w-8 h-8" />
+                    Feedback
                   </h3>
-                  <span className="text-[10px] font-black px-3 py-1 bg-red-400/10 text-red-400 rounded-full uppercase tracking-widest border border-red-400/20">{feedback.length} total</span>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {feedback.length === 0 ? (
                     <EmptyState message="No feedback yet." />
                   ) : (
                     feedback.map(f => (
-                      <div key={f.id} className="p-6 rounded-2xl bg-red-400/5 border border-red-400/10">
-                        <div className="flex justify-between mb-4">
-                          <span className="text-xs font-black text-red-400 uppercase tracking-widest">{f.rating} Stars</span>
-                          <span className="text-[10px] font-bold text-supporting-grey uppercase tracking-widest">{new Date(f.timestamp).toLocaleDateString()}</span>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        key={f.id} 
+                        className="p-8 rounded-[40px] bg-red-400/5 border border-red-400/10 hover:border-red-400/20 transition-all shadow-lg"
+                      >
+                        <div className="flex justify-between items-start mb-6">
+                          <span className="px-3 py-1 bg-red-400/10 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-red-400/20">{f.rating} Stars</span>
+                          <span className="text-[10px] font-black text-supporting-grey uppercase tracking-widest opacity-50">{new Date(f.timestamp).toLocaleDateString()}</span>
                         </div>
-                        <p className="text-lg font-medium text-white/90 mb-2 leading-relaxed">{f.comment}</p>
-                        <div className="space-y-2 mb-4">
-                          {f.highlight && <p className="text-sm text-supporting-grey italic">Highlight: {f.highlight}</p>}
-                          {f.source && <p className="text-[10px] text-supporting-grey uppercase tracking-widest">Source: {f.source}</p>}
-                          {f.recommend !== undefined && (
-                            <p className="text-[10px] text-supporting-grey uppercase tracking-widest flex items-center gap-1">
-                              Recommend: {f.recommend ? <ThumbsUp size={10} className="text-emerald-400" /> : <ThumbsDown size={10} className="text-red-400" />}
-                            </p>
+                        <p className="text-xl font-bold text-white/90 mb-6 leading-relaxed">"{f.comment}"</p>
+                        <div className="space-y-3 mb-8">
+                          {f.highlight && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-red-400/50">Highlight</span>
+                              <p className="text-sm font-bold text-white/80">{f.highlight}</p>
+                            </div>
                           )}
+                          <div className="flex flex-wrap gap-4">
+                            {f.source && (
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full">
+                                <Share2 size={10} className="text-supporting-grey" />
+                                <span className="text-[10px] text-supporting-grey font-black uppercase tracking-widest">{f.source}</span>
+                              </div>
+                            )}
+                            {f.recommend !== undefined && (
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full">
+                                {f.recommend ? <ThumbsUp size={10} className="text-emerald-400" /> : <ThumbsDown size={10} className="text-red-400" />}
+                                <span className="text-[10px] text-supporting-grey font-black uppercase tracking-widest">Recommend</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         {f.guestName && (
-                          <div className="mb-6 pt-4 border-t border-white/5 flex items-center gap-2">
-                            <User size={12} className="text-red-400" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">{f.guestName} {f.guestEmail && `(${f.guestEmail})`}</span>
+                          <div className="mb-8 pt-6 border-t border-white/5 flex items-center gap-3">
+                            <div className="w-8 h-8 bg-red-400/10 rounded-xl flex items-center justify-center">
+                              <User size={14} className="text-red-400" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{f.guestName}</p>
+                              <p className="text-[10px] text-supporting-grey font-bold lowercase tracking-tight leading-none">{f.guestEmail}</p>
+                            </div>
                           </div>
                         )}
-                        <div className="flex gap-6">
-                          <button className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-white transition-colors">Reply via Email</button>
+                        <div className="flex gap-8">
+                          <button className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-white transition-colors">Reply</button>
                           <button className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-emerald-400 transition-colors">Resolve</button>
                         </div>
-                      </div>
+                      </motion.div>
                     ))
                   )}
                 </div>
-              </Card>
+              </div>
             </div>
           </div>
         )}
