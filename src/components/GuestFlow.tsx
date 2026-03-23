@@ -16,21 +16,41 @@ import { motion, AnimatePresence } from 'motion/react';
 import { HotelSettings, Promo } from '../types';
 import { Button, cn } from './UI';
 
-export default function GuestFlow({ hotelId, initialSettings }: { hotelId: string, initialSettings: HotelSettings | null }) {
-  const [step, setStep] = useState<'rating' | 'highlight' | 'feedback' | 'moreQuestions' | 'shareInfo' | 'thanks' | 'promos'>('rating');
+interface GuestFlowProps {
+  hotelId: string;
+  initialSettings: HotelSettings | null;
+  isPreview?: boolean;
+  key?: any;
+}
+
+export default function GuestFlow({ hotelId, initialSettings, isPreview = false }: GuestFlowProps) {
+  const [step, setStep] = useState<'rating' | 'highlight' | 'feedback' | 'customQuestions' | 'moreQuestions' | 'thanks' | 'promos'>('rating');
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [highlight, setHighlight] = useState('');
   const [feedback, setFeedback] = useState('');
   const [source, setSource] = useState('');
   const [recommend, setRecommend] = useState<boolean | null>(null);
-  const [guestName, setGuestName] = useState('');
-  const [guestEmail, setGuestEmail] = useState('');
+  const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [promos, setPromos] = useState<Promo[]>([]);
   const [settings, setSettings] = useState<HotelSettings | null>(initialSettings);
+  const [cid, setCid] = useState<string | null>(null);
 
-  const steps = ['rating', 'highlight', 'feedback', 'moreQuestions', 'shareInfo', 'promos', 'thanks'];
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const campaignId = params.get('cid');
+    if (campaignId) setCid(campaignId);
+  }, []);
+
+  const steps = [
+    'rating', 
+    rating >= 4 ? 'highlight' : 'feedback',
+    settings?.customQuestions?.length ? 'customQuestions' : null,
+    'moreQuestions', 
+    settings?.showPromos && promos.length > 0 ? 'promos' : null, 
+    'thanks'
+  ].filter(Boolean) as any[];
   const currentStepIndex = steps.indexOf(step);
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
 
@@ -55,13 +75,19 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
       try {
         const q = query(collection(db, `hotels/${hotelId}/promos`));
         const snap = await getDocs(q);
-        setPromos(snap.docs.map(d => ({ id: d.id, ...d.data() } as Promo)).filter(p => p.active));
+        let activePromos = snap.docs.map(d => ({ id: d.id, ...d.data() } as Promo)).filter(p => p.active);
+        
+        if (settings && !settings.showNewsletter) {
+          activePromos = activePromos.filter(p => p.type !== 'newsletter');
+        }
+        
+        setPromos(activePromos);
       } catch (error) {
         console.error("Error fetching promos:", error);
       }
     };
     fetchPromos();
-  }, [hotelId]);
+  }, [hotelId, settings?.showNewsletter]);
 
   const suggestions = ['Amazing!', 'Perfect!', 'Wow!', 'Cozy', 'Stunning', 'Friendly'];
   const sourceOptions = ['Google Search', 'Social Media', 'Friend/Family', 'Travel Agent', 'Other'];
@@ -84,8 +110,35 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
     }
   };
 
+  const nextAfterFeedback = () => {
+    if (settings?.customQuestions?.length) {
+      setStep('customQuestions');
+    } else {
+      setStep('moreQuestions');
+    }
+  };
+
   const handleHighlightSubmit = () => {
+    nextAfterFeedback();
+  };
+
+  const handleFeedbackSubmit = () => {
+    nextAfterFeedback();
+  };
+
+  const handleCustomQuestionsSubmit = () => {
     setStep('moreQuestions');
+  };
+
+  const canSubmitCustom = () => {
+    if (!settings?.customQuestions) return true;
+    return settings.customQuestions.every(q => {
+      if (!q.required) return true;
+      const answer = customAnswers[q.id];
+      if (q.type === 'boolean') return answer !== undefined;
+      if (q.type === 'rating') return answer > 0;
+      return !!answer;
+    });
   };
 
   const handleFinalSubmit = async () => {
@@ -100,16 +153,18 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
       const commonData: any = {
         rating,
         timestamp: new Date().toISOString(),
-        guestId: 'anonymous'
+        guestId: 'anonymous',
+        customAnswers: Object.keys(customAnswers).length > 0 ? customAnswers : null,
+        cid: cid || null
       };
 
       // Only add optional fields if they have values to satisfy Firestore string rules
+      if (commonData.customAnswers === null) delete commonData.customAnswers;
+      if (commonData.cid === null) delete commonData.cid;
       if (oneWord) commonData.oneWord = oneWord;
       if (highlight) commonData.highlight = highlight;
       if (source) commonData.source = source;
       if (recommend !== null) commonData.recommend = recommend;
-      if (guestName) commonData.guestName = guestName;
-      if (guestEmail) commonData.guestEmail = guestEmail;
 
       if (rating >= 4) {
         await addDoc(collection(db, `hotels/${hotelId}/reviews`), commonData);
@@ -133,11 +188,10 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
     }
   };
 
-  const handleNewsletterSignup = async (email: string, name?: string) => {
+  const handleNewsletterSignup = async (email: string) => {
     try {
       await addDoc(collection(db, `hotels/${hotelId}/signups`), {
         email,
-        name: name || null,
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -147,7 +201,10 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
 
   if (!settings) {
     return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 font-soehne overflow-hidden relative">
+      <div className={cn(
+        "bg-black text-white flex flex-col items-center justify-center p-6 font-soehne overflow-hidden relative",
+        isPreview ? "h-full w-full" : "min-h-screen"
+      )}>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,131,218,0.05),transparent_70%)]" />
         
         {/* Skeleton UI */}
@@ -178,7 +235,10 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 font-soehne overflow-hidden relative">
+    <div className={cn(
+      "bg-black text-white flex flex-col items-center justify-center p-6 font-soehne overflow-hidden relative",
+      isPreview ? "h-full w-full" : "min-h-screen"
+    )}>
       {/* Immersive Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-1/4 -left-1/4 w-full h-full bg-pink/5 blur-[60px] rounded-full opacity-30" />
@@ -186,7 +246,10 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
       </div>
 
       {/* Progress Bar */}
-      <div className="fixed top-0 left-0 w-full h-1.5 bg-white/5 z-[100]">
+      <div className={cn(
+        "w-full h-1.5 bg-white/5 z-[100]",
+        isPreview ? "absolute top-0 left-0" : "fixed top-0 left-0"
+      )}>
         <motion.div 
           className="h-full bg-pink shadow-[0_0_15px_#FF00FF]"
           initial={{ width: 0 }}
@@ -265,7 +328,7 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
                     onClick={() => handleRatingSubmit(star)}
                     className={cn(
                       "p-2 rounded-xl transition-all duration-200",
-                      (hoverRating || rating) >= star ? "text-pink drop-shadow-[0_0_15px_rgba(255,0,255,0.3)]" : "text-white/10"
+                      (hoverRating || rating) >= star ? "text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.3)]" : "text-white/10"
                     )}
                   >
                     <Star size={36} fill={(hoverRating || rating) >= star ? "currentColor" : "none"} strokeWidth={1.5} />
@@ -351,6 +414,96 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
           </motion.div>
         )}
 
+        {step === 'customQuestions' && (
+          <motion.div 
+            key="customQuestions"
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -40 }}
+            className="max-w-md w-full z-10 px-4"
+          >
+            <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-4 uppercase">A few more details</h2>
+            <p className="text-supporting-grey text-lg mb-8">Help us personalize your experience.</p>
+            
+            <div className="space-y-8 mb-10">
+              {settings?.customQuestions?.map((q) => (
+                <div key={q.id} className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-supporting-grey block">
+                    {q.text} {q.required && <span className="text-pink">*</span>}
+                  </label>
+                  
+                  {q.type === 'text' && (
+                    <input 
+                      type="text"
+                      value={customAnswers[q.id] || ''}
+                      onChange={(e) => setCustomAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                      placeholder="Your answer..."
+                      className="w-full p-4 bg-charcoal border border-white/10 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-pink"
+                    />
+                  )}
+
+                  {q.type === 'boolean' && (
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setCustomAnswers(prev => ({ ...prev, [q.id]: true }))}
+                        className={cn(
+                          "flex-1 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all",
+                          customAnswers[q.id] === true ? "bg-pink text-black border-pink" : "bg-white/5 text-white border-white/10 hover:border-white/20"
+                        )}
+                      >
+                        Yes
+                      </button>
+                      <button 
+                        onClick={() => setCustomAnswers(prev => ({ ...prev, [q.id]: false }))}
+                        className={cn(
+                          "flex-1 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all",
+                          customAnswers[q.id] === false ? "bg-pink text-black border-pink" : "bg-white/5 text-white border-white/10 hover:border-white/20"
+                        )}
+                      >
+                        No
+                      </button>
+                    </div>
+                  )}
+
+                  {q.type === 'rating' && (
+                    <div className="flex justify-between gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          onClick={() => setCustomAnswers(prev => ({ ...prev, [q.id]: star }))}
+                          className={cn(
+                            "p-2 transition-all",
+                            (customAnswers[q.id] || 0) >= star ? "text-yellow-400" : "text-white/10"
+                          )}
+                        >
+                          <Star size={24} fill={(customAnswers[q.id] || 0) >= star ? "currentColor" : "none"} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <Button 
+                onClick={handleCustomQuestionsSubmit} 
+                disabled={!canSubmitCustom()}
+                variant="accent" 
+                className="w-full py-6 uppercase tracking-widest font-black shadow-[0_10px_30px_rgba(255,0,255,0.3)]"
+              >
+                Continue
+              </Button>
+              <button 
+                onClick={() => setStep('moreQuestions')} 
+                className="text-supporting-grey hover:text-white transition-colors text-xs font-black uppercase tracking-widest py-2"
+              >
+                Skip
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {step === 'moreQuestions' && (
           <motion.div 
             key="moreQuestions"
@@ -414,59 +567,9 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
             </div>
 
             <div className="flex flex-col gap-4">
-              <Button onClick={() => setStep('shareInfo')} variant="accent" className="w-full uppercase tracking-widest">
-                Next
+              <Button onClick={handleFinalSubmit} disabled={submitting} variant="accent" className="w-full py-6 uppercase tracking-widest font-black shadow-[0_10px_30px_rgba(255,131,218,0.3)]">
+                {submitting ? 'Saving...' : 'Finish Experience'}
               </Button>
-              <button 
-                onClick={() => setStep('shareInfo')} 
-                className="text-supporting-grey hover:text-white transition-colors text-sm font-bold uppercase tracking-widest py-2"
-              >
-                Skip
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {step === 'shareInfo' && (
-          <motion.div 
-            key="shareInfo"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="max-w-md w-full z-10 px-4"
-          >
-            <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-4 uppercase">VIP Access?</h2>
-            <p className="text-supporting-grey text-lg mb-8">Share your info for exclusive treats and follow-ups.</p>
-            
-            <div className="space-y-4 mb-10">
-              <input 
-                type="text" 
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Your Name"
-                className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink placeholder:text-white/20 shadow-inner"
-              />
-              <input 
-                type="email" 
-                value={guestEmail}
-                onChange={(e) => setGuestEmail(e.target.value)}
-                placeholder="Your Email"
-                className="w-full p-6 bg-charcoal border border-white/10 rounded-3xl text-white text-lg focus:outline-none focus:ring-2 focus:ring-pink placeholder:text-white/20 shadow-inner"
-              />
-            </div>
-
-            <div className="flex flex-col gap-4">
-              <Button onClick={handleFinalSubmit} disabled={submitting} variant="accent" className="w-full py-6 uppercase tracking-widest font-black">
-                {submitting ? 'Sending...' : 'Join the Circle'}
-              </Button>
-              <button 
-                onClick={handleFinalSubmit} 
-                disabled={submitting}
-                className="text-supporting-grey hover:text-white transition-colors text-xs font-black uppercase tracking-widest py-2"
-              >
-                Maybe Later
-              </button>
             </div>
           </motion.div>
         )}
@@ -514,7 +617,7 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
                           onClick={() => {
                             const input = document.getElementById(`newsletter-${promo.id}`) as HTMLInputElement;
                             if (input?.value) {
-                              handleNewsletterSignup(input.value, guestName);
+                              handleNewsletterSignup(input.value);
                               input.value = '';
                               alert('Thank you for signing up!');
                             }

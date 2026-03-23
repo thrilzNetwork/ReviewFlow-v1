@@ -1,3 +1,10 @@
+export interface CustomQuestion {
+  id: string;
+  text: string;
+  type: 'text' | 'boolean' | 'rating';
+  required: boolean;
+}
+
 export interface HotelSettings {
   hotelName: string;
   logoUrl?: string;
@@ -8,6 +15,10 @@ export interface HotelSettings {
   yelpLink?: string;
   facebookLink?: string;
   adminEmail: string;
+  customQuestions?: CustomQuestion[];
+  qrCampaignId?: string;
+  showPromos?: boolean;
+  showNewsletter?: boolean;
 }
 
 export interface Review {

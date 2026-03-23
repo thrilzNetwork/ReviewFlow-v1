@@ -23,7 +23,14 @@ import AdminDashboard from './components/AdminDashboard';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      return !!(params.get('hotelId') || hashParams.get('hotelId'));
+    }
+    return false;
+  });
   const [view, setView] = useState<'guest' | 'admin'>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -41,7 +48,14 @@ export default function App() {
     return null;
   });
   const [settings, setSettings] = useState<HotelSettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      return !(params.get('hotelId') || hashParams.get('hotelId'));
+    }
+    return true;
+  });
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Sync URL changes
@@ -62,20 +76,19 @@ export default function App() {
     return () => window.removeEventListener('popstate', handleUrlChange);
   }, []);
 
-  // Auth listener
+  // Auth listener - ONLY for admin view
   useEffect(() => {
+    if (view !== 'admin') return;
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setIsAuthReady(true);
       
-      if (u && !hotelId && view === 'admin') {
+      if (u && !hotelId) {
         setHotelId(u.uid);
       }
       
-      // If we are in admin view, we need auth to stop loading
-      if (view === 'admin') {
-        setLoading(false);
-      }
+      setLoading(false);
     });
     return () => unsubscribe();
   }, [hotelId, view]);

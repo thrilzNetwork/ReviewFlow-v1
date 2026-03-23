@@ -9,8 +9,9 @@ import {
   query, collection, orderBy, limit, onSnapshot, setDoc, doc, addDoc, updateDoc 
 } from 'firebase/firestore';
 import { db, auth, OperationType, handleFirestoreError, signOut, deleteDoc } from '../firebase';
-import { HotelSettings, Review, Feedback, Promo, NewsletterSignup } from '../types';
+import { HotelSettings, Review, Feedback, Promo, NewsletterSignup, CustomQuestion } from '../types';
 import { Button, Card, cn } from './UI';
+import GuestFlow from './GuestFlow';
 
 export default function AdminDashboard({ user, hotelId, settings, onSignIn, authError }: { 
   user: any, 
@@ -26,6 +27,7 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
   const [signups, setSignups] = useState<NewsletterSignup[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
+  const [previewKey, setPreviewKey] = useState(0);
 
   // Unified Guest List
   const guestList = useMemo(() => {
@@ -111,8 +113,12 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
     tripAdvisorLink: '',
     yelpLink: '',
     facebookLink: '',
-    adminEmail: user?.email || ''
+    adminEmail: user?.email || '',
+    customQuestions: [],
+    showPromos: true,
+    showNewsletter: true
   });
+  const [newQuestion, setNewQuestion] = useState<Partial<CustomQuestion>>({ text: '', type: 'text', required: false });
 
   // Promo form state
   const [promoForm, setPromoForm] = useState<Partial<Promo>>({
@@ -171,21 +177,45 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
     };
   }, [hotelId, user]);
 
-  const handleSaveSettings = async () => {
+  const handleSaveSettings = async (overrideSettings?: HotelSettings) => {
     if (!hotelId) return;
-    if (!form.hotelName.trim() || !form.adminEmail.trim()) {
+    const settingsToSave = overrideSettings || form;
+    if (!settingsToSave.hotelName.trim() || !settingsToSave.adminEmail.trim()) {
       alert('Hotel Name and Admin Email are required.');
       return;
     }
     setIsSaving(true);
     try {
-      await setDoc(doc(db, `hotels/${hotelId}/settings/config`), form);
+      await setDoc(doc(db, `hotels/${hotelId}/settings/config`), settingsToSave);
       alert('Settings saved successfully!');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `hotels/${hotelId}/settings/config`);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleRegenerateQR = async () => {
+    const newId = Math.random().toString(36).substring(7);
+    const newSettings = { ...form, qrCampaignId: newId };
+    setForm(newSettings);
+    await handleSaveSettings(newSettings);
+  };
+
+  const addQuestion = () => {
+    if (!newQuestion.text) return;
+    const q: CustomQuestion = { 
+      id: Date.now().toString(), 
+      text: newQuestion.text, 
+      type: newQuestion.type as any || 'text', 
+      required: !!newQuestion.required 
+    };
+    setForm({ ...form, customQuestions: [...(form.customQuestions || []), q] });
+    setNewQuestion({ text: '', type: 'text', required: false });
+  };
+
+  const removeQuestion = (id: string) => {
+    setForm({ ...form, customQuestions: (form.customQuestions || []).filter(q => q.id !== id) });
   };
 
   const handleAddPromo = async () => {
@@ -457,30 +487,132 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
         )}
 
         {activeTab === 'settings' && (
-          <Card className="max-w-5xl">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-              <div className="space-y-8">
-                <h3 className="text-xl font-black uppercase tracking-tight border-b border-white/5 pb-4">Branding</h3>
-                <Input label="Hotel Name" value={form.hotelName} onChange={v => setForm({...form, hotelName: v})} />
-                <Input label="Logo URL" value={form.logoUrl || ''} onChange={v => setForm({...form, logoUrl: v})} placeholder="https://..." />
-                <Input label="Primary Color" type="color" value={form.primaryColor} onChange={v => setForm({...form, primaryColor: v})} />
-                <Input label="Welcome Line" value={form.welcomeLine} onChange={v => setForm({...form, welcomeLine: v})} />
-                <Input label="Admin Email" value={form.adminEmail} onChange={v => setForm({...form, adminEmail: v})} />
+          <div className="flex flex-col xl:flex-row gap-8 items-start">
+            <Card className="flex-1">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <div className="space-y-8">
+                  <h3 className="text-xl font-black uppercase tracking-tight border-b border-white/5 pb-4">Branding</h3>
+                  <Input label="Hotel Name" value={form.hotelName} onChange={v => setForm({...form, hotelName: v})} />
+                  <Input label="Logo URL" value={form.logoUrl || ''} onChange={v => setForm({...form, logoUrl: v})} placeholder="https://..." />
+                  <Input label="Primary Color" type="color" value={form.primaryColor} onChange={v => setForm({...form, primaryColor: v})} />
+                  <Input label="Welcome Line" value={form.welcomeLine} onChange={v => setForm({...form, welcomeLine: v})} />
+                  <Input label="Admin Email" value={form.adminEmail} onChange={v => setForm({...form, adminEmail: v})} />
+                  
+                  <div className="pt-8 space-y-6">
+                    <h3 className="text-xl font-black uppercase tracking-tight border-b border-white/5 pb-4">Flow Conversion</h3>
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                      <span className="text-sm font-bold uppercase tracking-widest">Show Promotions</span>
+                      <button 
+                        onClick={() => setForm({...form, showPromos: !form.showPromos})}
+                        className={cn("w-12 h-6 rounded-full relative transition-colors", form.showPromos ? "bg-pink" : "bg-white/10")}
+                      >
+                        <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-all", form.showPromos ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                      <span className="text-sm font-bold uppercase tracking-widest">Show Newsletter</span>
+                      <button 
+                        onClick={() => setForm({...form, showNewsletter: !form.showNewsletter})}
+                        className={cn("w-12 h-6 rounded-full relative transition-colors", form.showNewsletter ? "bg-pink" : "bg-white/10")}
+                      >
+                        <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-all", form.showNewsletter ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-8">
+                  <h3 className="text-xl font-black uppercase tracking-tight border-b border-white/5 pb-4">Social Links</h3>
+                  <Input label="Google Review Link" value={form.googleLink || ''} onChange={v => setForm({...form, googleLink: v})} />
+                  <Input label="TripAdvisor Link" value={form.tripAdvisorLink || ''} onChange={v => setForm({...form, tripAdvisorLink: v})} />
+                  <Input label="Yelp Link" value={form.yelpLink || ''} onChange={v => setForm({...form, yelpLink: v})} />
+                  <Input label="Facebook Link" value={form.facebookLink || ''} onChange={v => setForm({...form, facebookLink: v})} />
+                  
+                  <div className="pt-8 space-y-6">
+                    <h3 className="text-xl font-black uppercase tracking-tight border-b border-white/5 pb-4">Custom Questions</h3>
+                    <div className="space-y-4">
+                      {(form.customQuestions || []).map(q => (
+                        <div key={q.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                          <div>
+                            <p className="text-sm font-bold">{q.text}</p>
+                            <p className="text-[10px] text-supporting-grey uppercase tracking-widest">{q.type} • {q.required ? 'Required' : 'Optional'}</p>
+                          </div>
+                          <button onClick={() => removeQuestion(q.id)} className="text-supporting-grey hover:text-red-400">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="p-6 bg-white/5 rounded-3xl border border-white/10 space-y-4">
+                        <Input label="New Question" value={newQuestion.text || ''} onChange={v => setNewQuestion({...newQuestion, text: v})} placeholder="e.g. How was the breakfast?" />
+                        <div className="grid grid-cols-2 gap-4">
+                          <select 
+                            value={newQuestion.type} 
+                            onChange={(e) => setNewQuestion({...newQuestion, type: e.target.value as any})}
+                            className="p-4 bg-white/5 rounded-2xl border border-white/5 text-white text-xs uppercase tracking-widest font-black"
+                          >
+                            <option value="text">Text</option>
+                            <option value="boolean">Yes/No</option>
+                            <option value="rating">Rating</option>
+                          </select>
+                          <button 
+                            onClick={() => setNewQuestion({...newQuestion, required: !newQuestion.required})}
+                            className={cn("p-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all", newQuestion.required ? "bg-pink/10 border-pink text-pink" : "border-white/5 text-supporting-grey")}
+                          >
+                            {newQuestion.required ? 'Required' : 'Optional'}
+                          </button>
+                        </div>
+                        <Button onClick={addQuestion} variant="outline" className="w-full py-3 text-[10px] uppercase tracking-widest">Add Question</Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-8">
-                <h3 className="text-xl font-black uppercase tracking-tight border-b border-white/5 pb-4">Social Links</h3>
-                <Input label="Google Review Link" value={form.googleLink || ''} onChange={v => setForm({...form, googleLink: v})} />
-                <Input label="TripAdvisor Link" value={form.tripAdvisorLink || ''} onChange={v => setForm({...form, tripAdvisorLink: v})} />
-                <Input label="Yelp Link" value={form.yelpLink || ''} onChange={v => setForm({...form, yelpLink: v})} />
-                <Input label="Facebook Link" value={form.facebookLink || ''} onChange={v => setForm({...form, facebookLink: v})} />
+              <div className="mt-16 pt-8 border-t border-white/5 flex justify-end">
+                <Button onClick={handleSaveSettings} disabled={isSaving} variant="accent" className="w-full md:w-auto uppercase tracking-widest">
+                  {isSaving ? 'Saving...' : 'Save All Changes'}
+                </Button>
               </div>
+            </Card>
+
+            {/* Live Preview */}
+            <div className="w-full xl:w-[400px] sticky top-8 space-y-4">
+              <div className="flex items-center justify-between px-2">
+                <h3 className="text-xs font-black uppercase tracking-widest text-supporting-grey">Live Preview</h3>
+                <button 
+                  onClick={() => setPreviewKey(prev => prev + 1)}
+                  className="text-[10px] font-black uppercase tracking-widest text-pink hover:opacity-80 transition-opacity"
+                >
+                  Reset Preview
+                </button>
+              </div>
+              <div className="aspect-[9/19] w-full bg-black border-[8px] border-charcoal rounded-[3rem] overflow-hidden shadow-2xl relative">
+                {/* Mobile Status Bar */}
+                <div className="absolute top-0 left-0 w-full h-8 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-6">
+                  <span className="text-[10px] font-bold">9:41</span>
+                  <div className="flex gap-1.5">
+                    <div className="w-3 h-3 rounded-full border border-white/20" />
+                    <div className="w-3 h-3 rounded-full border border-white/20" />
+                  </div>
+                </div>
+                
+                <div className="absolute inset-0 scale-[0.9] origin-center">
+                  {hotelId && (
+                    <GuestFlow 
+                      key={previewKey} 
+                      hotelId={hotelId} 
+                      initialSettings={form} 
+                      isPreview={true}
+                    />
+                  )}
+                </div>
+
+                {/* Home Indicator */}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-white/20 rounded-full z-50" />
+              </div>
+              <p className="text-[10px] text-center text-supporting-grey font-medium italic">
+                Interactive preview. Changes reflect in real-time.
+              </p>
             </div>
-            <div className="mt-16 pt-8 border-t border-white/5 flex justify-end">
-              <Button onClick={handleSaveSettings} disabled={isSaving} variant="accent" className="w-full md:w-auto uppercase tracking-widest">
-                {isSaving ? 'Saving...' : 'Save All Changes'}
-              </Button>
-            </div>
-          </Card>
+          </div>
         )}
 
         {activeTab === 'qr' && (
@@ -488,7 +620,7 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
             <Card className="flex flex-col items-center justify-center p-12 md:p-20">
               <div className="p-8 md:p-12 bg-white rounded-[40px] shadow-[0_0_60px_rgba(255,255,255,0.1)] mb-12">
                 <QRCodeSVG 
-                  value={`${window.location.origin}/?hotelId=${hotelId}`} 
+                  value={`${window.location.origin}/?hotelId=${hotelId}${form.qrCampaignId ? `&cid=${form.qrCampaignId}` : ''}`} 
                   size={window.innerWidth < 768 ? 200 : 280}
                   level="H"
                   includeMargin={true}
@@ -496,10 +628,15 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
               </div>
               <h3 className="text-3xl font-black mb-4 uppercase tracking-tighter">Scan to Rate</h3>
               <p className="text-supporting-grey font-medium mb-12 text-center">Point your camera to start the flow</p>
-              <Button variant="outline" className="flex items-center gap-3 w-full md:w-auto justify-center uppercase tracking-widest text-sm">
-                <Download size={20} />
-                Download PNG
-              </Button>
+              <div className="flex flex-col gap-4 w-full md:w-auto">
+                <Button variant="outline" className="flex items-center gap-3 justify-center uppercase tracking-widest text-sm">
+                  <Download size={20} />
+                  Download PNG
+                </Button>
+                <Button onClick={handleRegenerateQR} variant="outline" className="text-[10px] uppercase tracking-widest text-supporting-grey hover:text-white">
+                  Regenerate QR Code
+                </Button>
+              </div>
             </Card>
             <div className="space-y-8">
               <Card>
