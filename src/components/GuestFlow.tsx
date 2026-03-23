@@ -548,38 +548,61 @@ export default function GuestFlow({ hotelId, initialSettings }: { hotelId: strin
         )}
 
         {step === 'thanks' && (
-          <motion.div 
+          <motion.div
             key="thanks"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             className="max-w-md w-full text-center z-10"
           >
-            <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-10 border border-emerald-500/30">
-              <CheckCircle size={48} className="text-emerald-500" />
-            </div>
-            <h2 className="text-5xl font-black tracking-tighter mb-6 uppercase">Thank You!</h2>
-            <p className="text-supporting-grey text-lg mb-12 leading-relaxed">Your feedback helps us create better experiences for everyone.</p>
-            
-            {rating >= 4 && (
-              <div className="space-y-4">
-                <p className="text-supporting-grey text-xs font-black uppercase tracking-widest mb-6">Share the love</p>
-                <div className="grid grid-cols-2 gap-4">
-                  {settings.googleLink && (
-                    <Button onClick={() => window.open(settings.googleLink, '_blank')} variant="secondary" className="flex items-center justify-center gap-2">
-                      <Share2 size={18} /> Google
-                    </Button>
-                  )}
-                  {settings.tripAdvisorLink && (
-                    <Button onClick={() => window.open(settings.tripAdvisorLink, '_blank')} variant="secondary" className="flex items-center justify-center gap-2">
-                      <ExternalLink size={18} /> TripAdvisor
-                    </Button>
-                  )}
+            {rating >= 4 ? (
+              <>
+                <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-10 border border-emerald-500/30">
+                  <CheckCircle size={48} className="text-emerald-500" />
                 </div>
-              </div>
+                <h2 className="text-5xl font-black tracking-tighter mb-6 uppercase">Thank You!</h2>
+                <p className="text-supporting-grey text-lg mb-12 leading-relaxed">So glad you loved your stay. Help other travellers find us!</p>
+
+                {(settings.googleLink || settings.tripAdvisorLink || settings.yelpLink || settings.facebookLink) && (
+                  <div className="space-y-4">
+                    <p className="text-supporting-grey text-xs font-black uppercase tracking-widest mb-6">Share the love</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      {settings.googleLink && (
+                        <Button onClick={() => window.open(settings.googleLink, '_blank')} variant="secondary" className="flex items-center justify-center gap-2">
+                          <Share2 size={18} /> Google
+                        </Button>
+                      )}
+                      {settings.tripAdvisorLink && (
+                        <Button onClick={() => window.open(settings.tripAdvisorLink, '_blank')} variant="secondary" className="flex items-center justify-center gap-2">
+                          <ExternalLink size={18} /> TripAdvisor
+                        </Button>
+                      )}
+                      {settings.yelpLink && (
+                        <Button onClick={() => window.open(settings.yelpLink, '_blank')} variant="secondary" className="flex items-center justify-center gap-2">
+                          <ExternalLink size={18} /> Yelp
+                        </Button>
+                      )}
+                      {settings.facebookLink && (
+                        <Button onClick={() => window.open(settings.facebookLink, '_blank')} variant="secondary" className="flex items-center justify-center gap-2">
+                          <Share2 size={18} /> Facebook
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="w-24 h-24 bg-blue/20 rounded-full flex items-center justify-center mx-auto mb-10 border border-blue/30">
+                  <MessageSquare size={48} className="text-blue" />
+                </div>
+                <h2 className="text-5xl font-black tracking-tighter mb-6 uppercase">We Hear You.</h2>
+                <p className="text-supporting-grey text-lg mb-8 leading-relaxed">Your feedback has been shared privately with our team.</p>
+                <p className="text-supporting-grey/60 text-sm mb-12 leading-relaxed">We take every experience seriously and will work hard to make things right.</p>
+              </>
             )}
-            
-            <button 
-              onClick={() => window.location.reload()} 
+
+            <button
+              onClick={() => window.location.reload()}
               className="mt-12 text-supporting-grey hover:text-white transition-colors text-xs font-black uppercase tracking-widest"
             >
               Done

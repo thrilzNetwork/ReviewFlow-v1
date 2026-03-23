@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  LayoutDashboard, Mail, Settings as SettingsIcon, Share2, QrCode, User, LogOut, 
-  Download, ThumbsUp, ThumbsDown, Star, ChevronRight, Trash2, AlertCircle 
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  LayoutDashboard, Mail, Settings as SettingsIcon, Share2, QrCode, User, LogOut,
+  Download, ThumbsUp, ThumbsDown, Star, ChevronRight, Trash2, AlertCircle, CheckCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { 
   query, collection, orderBy, limit, onSnapshot, setDoc, doc, addDoc, updateDoc 
 } from 'firebase/firestore';
@@ -99,6 +99,52 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const unresolvedCount = useMemo(() => feedback.filter(f => !f.resolved).length, [feedback]);
+
+  const qrRef = useRef<HTMLCanvasElement>(null);
+
+  const handleDownloadQR = () => {
+    const qrCanvas = qrRef.current;
+    if (!qrCanvas) return;
+    const pad = 40;
+    const qrSize = qrCanvas.width;
+    const cardW = qrSize + pad * 2;
+    const cardH = qrSize + 220;
+    const offscreen = document.createElement('canvas');
+    offscreen.width = cardW;
+    offscreen.height = cardH;
+    const ctx = offscreen.getContext('2d');
+    if (!ctx) return;
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.roundRect(0, 0, cardW, cardH, 24);
+    ctx.fill();
+    // Star row
+    ctx.font = 'bold 36px serif';
+    ctx.fillStyle = '#F59E0B';
+    ctx.textAlign = 'center';
+    ctx.fillText('★★★★★', cardW / 2, 56);
+    // CTA line
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillStyle = '#111111';
+    ctx.fillText('How was your stay?', cardW / 2, 92);
+    // QR code image
+    ctx.drawImage(qrCanvas, pad, 110, qrSize, qrSize);
+    // Hotel name
+    const hotelName = settings?.hotelName || 'Hotel';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillStyle = '#111111';
+    ctx.fillText(hotelName, cardW / 2, 110 + qrSize + 48);
+    // Subtle tagline
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#888888';
+    ctx.fillText('Scan to share your experience', cardW / 2, 110 + qrSize + 76);
+    const link = document.createElement('a');
+    link.download = `${hotelName.replace(/\s+/g, '-').toLowerCase()}-review-qr.png`;
+    link.href = offscreen.toDataURL('image/png');
+    link.click();
   };
 
   // Form state for settings
@@ -251,7 +297,7 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
         </div>
 
         <nav className="flex-1 p-6 space-y-2">
-          <NavItem active={activeTab === 'inbox'} icon={<Mail size={20} />} label="Inbox" onClick={() => setActiveTab('inbox')} />
+          <NavItem active={activeTab === 'inbox'} icon={<Mail size={20} />} label="Inbox" onClick={() => setActiveTab('inbox')} badge={unresolvedCount} />
           <NavItem active={activeTab === 'settings'} icon={<SettingsIcon size={20} />} label="Settings" onClick={() => setActiveTab('settings')} />
           <NavItem active={activeTab === 'promos'} icon={<Share2 size={20} />} label="Slides" onClick={() => setActiveTab('promos')} />
           <NavItem active={activeTab === 'qr'} icon={<QrCode size={20} />} label="QR Generator" onClick={() => setActiveTab('qr')} />
@@ -271,7 +317,7 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
 
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-charcoal/80 backdrop-blur-xl border-t border-white/5 flex justify-around p-4 z-50">
-        <MobileNavItem active={activeTab === 'inbox'} icon={<Mail size={20} />} label="Inbox" onClick={() => setActiveTab('inbox')} />
+        <MobileNavItem active={activeTab === 'inbox'} icon={<Mail size={20} />} label="Inbox" onClick={() => setActiveTab('inbox')} badge={unresolvedCount} />
         <MobileNavItem active={activeTab === 'settings'} icon={<SettingsIcon size={20} />} label="Settings" onClick={() => setActiveTab('settings')} />
         <MobileNavItem active={activeTab === 'promos'} icon={<Share2 size={20} />} label="Slides" onClick={() => setActiveTab('promos')} />
         <MobileNavItem active={activeTab === 'qr'} icon={<QrCode size={20} />} label="QR" onClick={() => setActiveTab('qr')} />
@@ -399,11 +445,16 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
                     <EmptyState message="No feedback yet." />
                   ) : (
                     feedback.map(f => (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        key={f.id} 
-                        className="p-8 rounded-[40px] bg-red-400/5 border border-red-400/10 hover:border-red-400/20 transition-all shadow-lg"
+                        key={f.id}
+                        className={cn(
+                          "p-8 rounded-[40px] border transition-all shadow-lg",
+                          f.resolved
+                            ? "bg-white/3 border-white/5 opacity-50"
+                            : "bg-red-400/5 border-red-400/10 hover:border-red-400/20"
+                        )}
                       >
                         <div className="flex justify-between items-start mb-6">
                           <span className="px-3 py-1 bg-red-400/10 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-red-400/20">{f.rating} Stars</span>
@@ -443,9 +494,35 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
                             </div>
                           </div>
                         )}
-                        <div className="flex gap-8">
-                          <button className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-white transition-colors">Reply</button>
-                          <button className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-emerald-400 transition-colors">Resolve</button>
+                        <div className="flex gap-8 items-center">
+                          {f.guestEmail && (
+                            <button
+                              onClick={() => window.open(
+                                `mailto:${f.guestEmail}?subject=${encodeURIComponent(`Re: Your Stay at ${settings?.hotelName || 'Our Hotel'}`)}&body=${encodeURIComponent(`Dear ${f.guestName || 'Guest'},\n\nThank you for sharing your feedback with us. We sincerely apologize for your experience and would love the opportunity to make things right.\n\nPlease let us know how we can assist you.\n\nWarm regards,\n${settings?.hotelName || 'Our Hotel'} Team`)}`,
+                                '_blank'
+                              )}
+                              className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-blue transition-colors"
+                            >
+                              Reply
+                            </button>
+                          )}
+                          {f.resolved ? (
+                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1">
+                              <CheckCircle size={12} /> Resolved
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (!hotelId) return;
+                                updateDoc(doc(db, `hotels/${hotelId}/feedback`, f.id), { resolved: true }).catch(err =>
+                                  handleFirestoreError(err, OperationType.UPDATE, `hotels/${hotelId}/feedback/${f.id}`)
+                                );
+                              }}
+                              className="text-[10px] font-black uppercase tracking-widest text-supporting-grey hover:text-emerald-400 transition-colors"
+                            >
+                              Resolve
+                            </button>
+                          )}
                         </div>
                       </motion.div>
                     ))
@@ -485,36 +562,50 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
 
         {activeTab === 'qr' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            <Card className="flex flex-col items-center justify-center p-12 md:p-20">
-              <div className="p-8 md:p-12 bg-white rounded-[40px] shadow-[0_0_60px_rgba(255,255,255,0.1)] mb-12">
-                <QRCodeSVG 
-                  value={`${window.location.origin}/?hotelId=${hotelId}`} 
-                  size={window.innerWidth < 768 ? 200 : 280}
-                  level="H"
-                  includeMargin={true}
-                />
+            <Card className="flex flex-col items-center justify-center p-8 md:p-12">
+              {/* Print-ready card preview */}
+              <div className="w-full max-w-[320px] bg-white rounded-[32px] shadow-[0_0_60px_rgba(255,255,255,0.12)] p-8 flex flex-col items-center gap-4 mb-10">
+                <p className="text-3xl tracking-widest">★★★★★</p>
+                <p className="text-black font-black text-base uppercase tracking-widest text-center">How was your stay?</p>
+                <div className="p-3 bg-white rounded-2xl shadow-sm">
+                  <QRCodeCanvas
+                    ref={qrRef}
+                    value={`${window.location.origin}/?hotelId=${hotelId}`}
+                    size={220}
+                    level="H"
+                    marginSize={2}
+                  />
+                </div>
+                <p className="text-black font-black text-lg uppercase tracking-tight text-center">{settings?.hotelName || 'Your Hotel'}</p>
+                <p className="text-gray-400 text-xs font-medium text-center">Scan to share your experience</p>
               </div>
-              <h3 className="text-3xl font-black mb-4 uppercase tracking-tighter">Scan to Rate</h3>
-              <p className="text-supporting-grey font-medium mb-12 text-center">Point your camera to start the flow</p>
-              <Button variant="outline" className="flex items-center gap-3 w-full md:w-auto justify-center uppercase tracking-widest text-sm">
+              <h3 className="text-3xl font-black mb-3 uppercase tracking-tighter">Scan to Rate</h3>
+              <p className="text-supporting-grey font-medium mb-10 text-center text-sm">Print on keycards, menus, or lobby signs</p>
+              <Button onClick={handleDownloadQR} variant="accent" className="flex items-center gap-3 w-full md:w-auto justify-center uppercase tracking-widest text-sm">
                 <Download size={20} />
                 Download PNG
               </Button>
             </Card>
             <div className="space-y-8">
               <Card>
-                <h3 className="text-xl font-black uppercase tracking-tight mb-6">QR Customization</h3>
-                <p className="text-supporting-grey font-medium mb-10 leading-relaxed">Print this QR code on keycards, menus, or lobby signs to capture real-time feedback.</p>
+                <h3 className="text-xl font-black uppercase tracking-tight mb-6">How it works</h3>
+                <p className="text-supporting-grey font-medium mb-8 leading-relaxed">
+                  Guests scan the QR code and rate their stay. The magic happens based on sentiment:
+                </p>
                 <div className="space-y-4">
-                  <div className="p-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
-                    <span className="text-sm font-bold uppercase tracking-widest">Include Logo</span>
-                    <div className="w-12 h-6 bg-pink rounded-full relative">
-                      <div className="absolute right-1.5 top-1.5 w-3 h-3 bg-black rounded-full" />
+                  <div className="p-6 rounded-2xl bg-emerald-400/5 border border-emerald-400/10 flex items-start gap-4">
+                    <span className="text-2xl shrink-0">😊</span>
+                    <div>
+                      <p className="text-sm font-black uppercase tracking-widest text-emerald-400 mb-1">4–5 Stars</p>
+                      <p className="text-sm text-supporting-grey font-medium">Guest is directed to your Google, TripAdvisor, Yelp, or Facebook page to post publicly.</p>
                     </div>
                   </div>
-                  <div className="p-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
-                    <span className="text-sm font-bold uppercase tracking-widest">Custom Text</span>
-                    <span className="text-xs text-supporting-grey font-bold uppercase tracking-widest">"How was your stay?"</span>
+                  <div className="p-6 rounded-2xl bg-red-400/5 border border-red-400/10 flex items-start gap-4">
+                    <span className="text-2xl shrink-0">😕</span>
+                    <div>
+                      <p className="text-sm font-black uppercase tracking-widest text-red-400 mb-1">1–3 Stars</p>
+                      <p className="text-sm text-supporting-grey font-medium">Feedback is captured privately and sent to your Inbox — keeping bad reviews off public platforms.</p>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -721,26 +812,31 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
   );
 }
 
-function MobileNavItem({ active, icon, label, onClick }: { active: boolean, icon: React.ReactNode, label: string, onClick: () => void }) {
+function MobileNavItem({ active, icon, label, onClick, badge }: { active: boolean, icon: React.ReactNode, label: string, onClick: () => void, badge?: number }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={cn(
         "flex flex-col items-center gap-2 p-2 rounded-2xl transition-all flex-1",
         active ? "text-pink" : "text-supporting-grey"
       )}
     >
-      <div className={cn("p-3 rounded-2xl transition-all", active && "bg-pink/10")}>
+      <div className={cn("p-3 rounded-2xl transition-all relative", active && "bg-pink/10")}>
         {icon}
+        {!!badge && (
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+            {badge > 9 ? '9+' : badge}
+          </span>
+        )}
       </div>
       <span className="text-[9px] font-black uppercase tracking-widest">{label}</span>
     </button>
   );
 }
 
-function NavItem({ active, icon, label, onClick }: { active: boolean, icon: React.ReactNode, label: string, onClick: () => void }) {
+function NavItem({ active, icon, label, onClick, badge }: { active: boolean, icon: React.ReactNode, label: string, onClick: () => void, badge?: number }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={cn(
         "flex items-center gap-4 w-full p-4 rounded-2xl transition-all font-bold uppercase tracking-widest text-xs",
@@ -748,7 +844,12 @@ function NavItem({ active, icon, label, onClick }: { active: boolean, icon: Reac
       )}
     >
       {icon}
-      <span>{label}</span>
+      <span className="flex-1 text-left">{label}</span>
+      {!!badge && (
+        <span className="w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center shrink-0">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
     </button>
   );
 }
