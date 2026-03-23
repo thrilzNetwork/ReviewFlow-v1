@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  db, addDoc, collection, getDocs, query, handleFirestoreError, OperationType
+  db, addDoc, collection, getDocs, query, doc, onSnapshot, handleFirestoreError, OperationType
 } from '../firebase';
 import { 
   Star, 
@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { HotelSettings, Promo } from '../types';
 import { Button, cn } from './UI';
 
-export default function GuestFlow({ hotelId, settings }: { hotelId: string, settings: HotelSettings | null }) {
+export default function GuestFlow({ hotelId, initialSettings }: { hotelId: string, initialSettings: HotelSettings | null }) {
   const [step, setStep] = useState<'rating' | 'highlight' | 'feedback' | 'moreQuestions' | 'shareInfo' | 'thanks' | 'promos'>('rating');
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -28,14 +28,29 @@ export default function GuestFlow({ hotelId, settings }: { hotelId: string, sett
   const [guestEmail, setGuestEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [promos, setPromos] = useState<Promo[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [settings, setSettings] = useState<HotelSettings | null>(initialSettings);
 
   const steps = ['rating', 'highlight', 'feedback', 'moreQuestions', 'shareInfo', 'promos', 'thanks'];
   const currentStepIndex = steps.indexOf(step);
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
 
   useEffect(() => {
-    setIsLoaded(true);
+    if (initialSettings) {
+      setSettings(initialSettings);
+    } else {
+      // Fetch settings directly if not provided
+      const unsubscribe = onSnapshot(doc(db, `hotels/${hotelId}/settings/config`), (docSnap) => {
+        if (docSnap.exists()) {
+          setSettings(docSnap.data() as HotelSettings);
+        }
+      }, (error) => {
+        console.error("GuestFlow settings fetch error:", error);
+      });
+      return () => unsubscribe();
+    }
+  }, [hotelId, initialSettings]);
+
+  useEffect(() => {
     const fetchPromos = async () => {
       try {
         const q = query(collection(db, `hotels/${hotelId}/promos`));
@@ -132,13 +147,32 @@ export default function GuestFlow({ hotelId, settings }: { hotelId: string, sett
 
   if (!settings) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 font-soehne overflow-hidden relative">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,131,218,0.05),transparent_70%)]" />
+        
+        {/* Skeleton UI */}
+        <div className="w-full max-w-md space-y-12 relative z-10">
+          <div className="space-y-4 text-center">
+            <div className="h-4 w-24 bg-white/5 rounded mx-auto animate-pulse" />
+            <div className="h-12 w-48 bg-white/5 rounded mx-auto animate-pulse" />
+          </div>
+          
+          <div className="flex justify-center gap-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="w-12 h-12 rounded-full bg-white/5 animate-pulse" />
+            ))}
+          </div>
+          
+          <div className="h-12 w-full bg-white/5 rounded-full animate-pulse" />
+        </div>
+
         <motion.div 
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-8 h-8 border-2 border-pink border-t-transparent rounded-full relative z-10"
-        />
+          animate={{ opacity: [0.3, 0.6, 0.3] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+          className="absolute bottom-12 text-supporting-grey font-black uppercase tracking-widest text-[10px] z-10"
+        >
+          Loading Experience...
+        </motion.div>
       </div>
     );
   }
@@ -147,22 +181,8 @@ export default function GuestFlow({ hotelId, settings }: { hotelId: string, sett
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 font-soehne overflow-hidden relative">
       {/* Immersive Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <motion.div 
-          animate={{ 
-            opacity: [0.03, 0.08, 0.03]
-          }}
-          transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-          style={{ willChange: 'opacity' }}
-          className="absolute -top-1/4 -left-1/4 w-full h-full bg-pink/5 blur-[30px] rounded-full"
-        />
-        <motion.div 
-          animate={{ 
-            opacity: [0.03, 0.06, 0.03]
-          }}
-          transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-          style={{ willChange: 'opacity' }}
-          className="absolute -bottom-1/4 -right-1/4 w-full h-full bg-blue/5 blur-[30px] rounded-full"
-        />
+        <div className="absolute -top-1/4 -left-1/4 w-full h-full bg-pink/5 blur-[60px] rounded-full opacity-30" />
+        <div className="absolute -bottom-1/4 -right-1/4 w-full h-full bg-blue/5 blur-[60px] rounded-full opacity-30" />
       </div>
 
       {/* Progress Bar */}

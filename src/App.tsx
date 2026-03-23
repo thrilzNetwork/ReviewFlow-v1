@@ -17,7 +17,7 @@ import { HotelSettings } from './types';
 import { Button, Card } from './components/UI';
 import GuestFlow from './components/GuestFlow';
 
-const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+import AdminDashboard from './components/AdminDashboard';
 
 // --- Main App ---
 
@@ -27,14 +27,16 @@ export default function App() {
   const [view, setView] = useState<'guest' | 'admin'>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      return params.get('hotelId') ? 'guest' : 'admin';
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      return (params.get('hotelId') || hashParams.get('hotelId')) ? 'guest' : 'admin';
     }
     return 'admin';
   });
   const [hotelId, setHotelId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      return params.get('hotelId');
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      return params.get('hotelId') || hashParams.get('hotelId');
     }
     return null;
   });
@@ -46,7 +48,8 @@ export default function App() {
   useEffect(() => {
     const handleUrlChange = () => {
       const params = new URLSearchParams(window.location.search);
-      const id = params.get('hotelId');
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const id = params.get('hotelId') || hashParams.get('hotelId');
       if (id) {
         setHotelId(id);
         setView('guest');
@@ -77,9 +80,9 @@ export default function App() {
     return () => unsubscribe();
   }, [hotelId, view]);
 
-  // Fetch settings
+  // Fetch settings (only if not in guest view, or let guest flow handle it)
   useEffect(() => {
-    if (!hotelId) {
+    if (!hotelId || view === 'guest') {
       if (view === 'admin') setLoading(false);
       return;
     }
@@ -108,7 +111,7 @@ export default function App() {
   };
 
   if (view === 'guest' && hotelId) {
-    return <GuestFlow hotelId={hotelId} settings={settings} />;
+    return <GuestFlow hotelId={hotelId} initialSettings={settings} />;
   }
 
   if (loading && !isAuthReady) {
@@ -124,25 +127,13 @@ export default function App() {
   }
 
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <motion.div 
-          animate={{ opacity: [0.3, 0.6, 0.3] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="text-supporting-grey font-black uppercase tracking-widest text-xs"
-        >
-          Loading Dashboard...
-        </motion.div>
-      </div>
-    }>
-      <AdminDashboard 
-        user={user} 
-        hotelId={hotelId} 
-        settings={settings} 
-        onSignIn={handleSignIn} 
-        authError={authError} 
-      />
-    </Suspense>
+    <AdminDashboard 
+      user={user} 
+      hotelId={hotelId} 
+      settings={settings} 
+      onSignIn={handleSignIn} 
+      authError={authError} 
+    />
   );
 }
 
