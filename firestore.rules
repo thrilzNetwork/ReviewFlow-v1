@@ -43,7 +43,7 @@ service cloud.firestore {
 
     function isValidFeedback(data) {
       return data.rating is number && data.rating >= 1 && data.rating <= 5 &&
-             data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
+             data.comment is string && data.comment.size() >= 0 && data.comment.size() < 2000 &&
              (!('highlight' in data) || (data.highlight is string && data.highlight.size() < 1000)) &&
              (!('source' in data) || (data.source is string && data.source.size() < 100)) &&
              (!('recommend' in data) || (data.recommend is bool)) &&
@@ -59,7 +59,7 @@ service cloud.firestore {
              (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 500)) &&
              (!('buttonText' in data) || (data.buttonText is string && data.buttonText.size() < 50)) &&
              (!('buttonLink' in data) || (data.buttonLink is string && data.buttonLink.size() < 500)) &&
-             data.type in ['promo', 'news', 'newsletter'] &&
+             data.type in ['promo', 'news', 'newsletter', 'blog'] &&
              data.active is bool;
     }
 

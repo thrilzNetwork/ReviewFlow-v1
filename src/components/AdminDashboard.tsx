@@ -8,7 +8,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { 
   query, collection, orderBy, limit, onSnapshot, setDoc, doc, addDoc, updateDoc 
 } from 'firebase/firestore';
-import { db, auth, OperationType, handleFirestoreError, signOut } from '../firebase';
+import { db, auth, OperationType, handleFirestoreError, signOut, deleteDoc } from '../firebase';
 import { HotelSettings, Review, Feedback, Promo, NewsletterSignup } from '../types';
 import { Button, Card, cn } from './UI';
 
@@ -173,6 +173,10 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
 
   const handleSaveSettings = async () => {
     if (!hotelId) return;
+    if (!form.hotelName.trim() || !form.adminEmail.trim()) {
+      alert('Hotel Name and Admin Email are required.');
+      return;
+    }
     setIsSaving(true);
     try {
       await setDoc(doc(db, `hotels/${hotelId}/settings/config`), form);
@@ -577,7 +581,6 @@ export default function AdminDashboard({ user, hotelId, settings, onSignIn, auth
                     onClick={async () => {
                       if (confirm('Delete this slide?')) {
                         try {
-                          const { deleteDoc } = await import('firebase/firestore');
                           await deleteDoc(doc(db, `hotels/${hotelId}/promos`, p.id));
                         } catch (error) {
                           handleFirestoreError(error, OperationType.DELETE, `hotels/${hotelId}/promos/${p.id}`);

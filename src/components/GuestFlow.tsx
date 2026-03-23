@@ -76,25 +76,32 @@ export default function GuestFlow({ hotelId, settings }: { hotelId: string, sett
   const handleFinalSubmit = async () => {
     setSubmitting(true);
     try {
-      const commonData = {
+      // Automatic oneWord summary generation
+      const textForSummary = rating >= 4 ? highlight : feedback;
+      const oneWord = textForSummary 
+        ? textForSummary.split(' ').filter(w => w.length > 3)[0] || textForSummary.split(' ')[0] || 'Feedback'
+        : (rating >= 4 ? 'Great' : 'Feedback');
+
+      const commonData: any = {
         rating,
-        highlight,
-        source: source || null,
-        recommend: recommend,
-        guestName: guestName || null,
-        guestEmail: guestEmail || null,
         timestamp: new Date().toISOString(),
         guestId: 'anonymous'
       };
 
+      // Only add optional fields if they have values to satisfy Firestore string rules
+      if (oneWord) commonData.oneWord = oneWord;
+      if (highlight) commonData.highlight = highlight;
+      if (source) commonData.source = source;
+      if (recommend !== null) commonData.recommend = recommend;
+      if (guestName) commonData.guestName = guestName;
+      if (guestEmail) commonData.guestEmail = guestEmail;
+
       if (rating >= 4) {
-        await addDoc(collection(db, `hotels/${hotelId}/reviews`), {
-          ...commonData,
-        });
+        await addDoc(collection(db, `hotels/${hotelId}/reviews`), commonData);
       } else {
         await addDoc(collection(db, `hotels/${hotelId}/feedback`), {
           ...commonData,
-          comment: feedback,
+          comment: feedback || '',
           resolved: false
         });
       }
